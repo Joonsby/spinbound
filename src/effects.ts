@@ -1,7 +1,13 @@
 import Phaser from 'phaser';
+import { getPlayerProgress, savePlayerProgress } from './progress';
 
 export type SoundCue = 'jump' | 'land' | 'dash' | 'coin' | 'enemy' | 'hurt';
-let soundEnabled = true;
+let soundEnabled = getPlayerProgress().soundEnabled;
+export function getSoundEnabled() { return soundEnabled; }
+export function setSoundEnabled(enabled: boolean) {
+  soundEnabled = enabled;
+  const progress = getPlayerProgress(); progress.soundEnabled = enabled; savePlayerProgress(progress);
+}
 let sharedContext: AudioContext | undefined;
 
 export function closeAudio() {
@@ -26,7 +32,7 @@ export class GameAudio {
     this.context = sharedContext;
     this.button = document.querySelector<HTMLButtonElement>('#sound-toggle')!;
     this.button.onclick = () => {
-      soundEnabled = !soundEnabled;
+      setSoundEnabled(!soundEnabled);
       this.refreshButton();
       if (soundEnabled) this.unlock();
       else this.silence();
@@ -164,7 +170,7 @@ export class GameEffects {
       g.generateTexture('fx-spark', 8, 8); g.destroy();
     }
     this.particles = Array.from({ length: 48 }, () => ({ image: scene.add.image(0, 0, 'fx-spark').setDepth(6).setVisible(false), vx: 0, vy: 0, age: 0, life: 0, size: 1 }));
-    this.ghosts = Array.from({ length: 6 }, () => ({ image: scene.add.image(0, 0, 'moss-idle-0').setDepth(3).setVisible(false), age: 0 }));
+    this.ghosts = Array.from({ length: 6 }, () => ({ image: scene.add.image(0, 0, 'robot-idle-0').setDepth(3).setVisible(false), age: 0 }));
   }
 
   burst(x: number, y: number, color: number, count: number, speed = 100) {

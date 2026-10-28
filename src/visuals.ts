@@ -9,48 +9,78 @@ export const THEMES = [
 
 // Game-wide textures and animations are generated once and reused after scene restarts.
 export function createTextures(scene: Phaser.Scene) {
-  if (scene.textures.exists('moss-idle-0')) return;
+  if (scene.textures.exists('robot-idle-0')) return;
   const g = scene.make.graphics({ x: 0, y: 0 });
   const save = (key: string, width: number, height: number, draw: () => void) => {
     g.clear(); draw(); g.generateTexture(key, width, height);
   };
-  const counts: Record<PlayerPose, number> = { idle: 4, run: 6, jump: 2, fall: 2, dash: 4, hurt: 2 };
+  const counts: Record<PlayerPose, number> = { idle: 4, run: 8, jump: 2, fall: 2, dash: 12, hurt: 2 };
   for (const pose of Object.keys(counts) as PlayerPose[]) {
     const count = counts[pose];
     for (let frame = 0; frame < count; frame++) {
-      save(`moss-${pose}-${frame}`, 48, 64, () => {
+      save(`robot-${pose}-${frame}`, 48, 64, () => {
         const phase = frame / count * Math.PI * 2;
-        const bob = pose === 'idle' ? Math.sin(phase) * 1.5 : pose === 'run' ? Math.abs(Math.sin(phase)) * -3 : 0;
-        const lean = pose === 'dash' ? 4 : 0;
-        const stride = pose === 'run' || pose === 'dash' ? Math.sin(phase) * 5 : pose === 'fall' ? 4 : 0;
+        const bob = pose === 'idle' ? Math.sin(phase) : pose === 'run' ? Math.sin(phase) * 0.4 : 0;
+        const orange = pose === 'hurt' ? 0xf17b62 : 0xf9a044;
         if (pose === 'dash') {
-          g.lineStyle(2, 0xe1fff4, 0.8);
-          for (let i = 0; i < 3; i++) g.lineBetween(1, 31 + i * 7, 10 + frame * 2, 31 + i * 7);
+          // Retracted wheels and interlocking shell panels form a rolling sphere.
+          g.fillStyle(0x46525b); g.fillCircle(24, 39, 21);
+          g.fillStyle(0xf2f2e9); g.fillCircle(24, 39, 19);
+          g.lineStyle(7, orange);
+          for (let panel = 0; panel < 3; panel++) {
+            const angle = phase + panel * Math.PI * 2 / 3;
+            g.beginPath(); g.arc(24, 39, 15, angle, angle + 1.25); g.strokePath();
+            g.fillStyle(0x66747e); g.fillCircle(24 + Math.cos(angle) * 11, 39 + Math.sin(angle) * 11, 2);
+          }
+          g.fillStyle(0x34434c); g.fillCircle(24, 39, 8);
+          g.fillStyle(0xa4f2ed);
+          for (const dx of [-3, 3]) g.fillCircle(24 + dx * Math.cos(phase), 39 + dx * Math.sin(phase), 2);
+          g.fillStyle(0xffffff, 0.7); g.fillCircle(17, 29, 3);
+          return;
         }
-        g.fillStyle(0x34665e); g.fillEllipse(23, 59, 28, 5);
-        g.fillStyle(0xda8a54); g.fillRoundedRect(12 + stride, 51, 12, 8, 4); g.fillRoundedRect(26 - stride, 51, 12, 8, 4);
-        g.fillStyle(0x4b9a7f); g.fillTriangle(12, 28 + bob, 4, 48 + bob, 25, 45 + bob);
-        g.fillStyle(pose === 'hurt' ? 0xffcab9 : 0xffedc7);
-        g.fillRoundedRect(10 + lean, 20 + bob, 30, 34, 14);
-        g.fillStyle(0xfff9e7); g.fillEllipse(27 + lean, 43 + bob, 19, 16);
-        g.fillStyle(0x69b38b); g.fillEllipse(20 + lean, 16 + bob, 15, 9); g.fillEllipse(32 + lean, 13 + bob, 16, 9);
-        g.lineStyle(3, 0x386a53); g.lineBetween(26 + lean, 22 + bob, 27 + lean, 13 + bob);
-        g.fillStyle(0xe78d7f); g.fillEllipse(15 + lean, 37 + bob, 7, 4); g.fillEllipse(36 + lean, 37 + bob, 6, 4);
-        g.lineStyle(2, 0x354d4b);
+        const lift = pose === 'jump' ? -3 - frame : pose === 'fall' ? 2 + frame : 0;
+        // Two independent little wheel pods; wheel phase is advanced by run frames.
+        for (const x of [13, 35]) {
+          const y = 54 + lift;
+          g.fillStyle(0x77828b); g.fillRoundedRect(x - 3, 44, 6, 12 + lift, 2);
+          g.fillStyle(0x35414b); g.fillCircle(x, y, 8);
+          g.fillStyle(0x87929a); g.fillCircle(x, y, 5.5);
+          const rotation = pose === 'run' ? phase : pose === 'jump' || pose === 'fall' ? phase * 0.2 : 0;
+          g.lineStyle(1.5, 0xd9e1e2);
+          for (let spoke = 0; spoke < 3; spoke++) {
+            const angle = rotation + spoke * Math.PI * 2 / 3;
+            g.lineBetween(x, y, x + Math.cos(angle) * 5, y + Math.sin(angle) * 5);
+          }
+          g.fillStyle(orange); g.fillCircle(x, y, 2.5);
+          g.fillStyle(0xfff5d8); g.fillCircle(x + Math.cos(rotation) * 5, y + Math.sin(rotation) * 5, 1.3);
+        }
+        // Compact round chassis, asymmetrical orange shoulder and service hatch.
+        g.fillStyle(0x55636c); g.fillRoundedRect(4, 16 + bob, 40, 34, 15);
+        g.fillStyle(0xf2f2e9); g.fillRoundedRect(6, 16 + bob, 36, 31, 14);
+        g.fillStyle(orange); g.fillRoundedRect(6, 18 + bob, 10, 27, 7);
+        g.fillStyle(0xffffff, 0.75); g.fillEllipse(27, 19 + bob, 15, 4);
+        g.fillStyle(0x71818a); g.fillRoundedRect(22, 42 + bob, 13, 5, 2);
+        g.fillStyle(orange); g.fillCircle(37, 41 + bob, 2);
+        g.fillStyle(0x35434d); g.fillRoundedRect(14, 24 + bob, 25, 14, 6);
+        g.fillStyle(pose === 'hurt' ? 0xff9a84 : 0xa4f2ed);
         if (pose === 'hurt') {
-          g.lineBetween(19 + lean, 30 + bob, 23 + lean, 34 + bob); g.lineBetween(23 + lean, 30 + bob, 19 + lean, 34 + bob);
-          g.lineBetween(30 + lean, 30 + bob, 34 + lean, 34 + bob); g.lineBetween(34 + lean, 30 + bob, 30 + lean, 34 + bob);
+          g.lineStyle(2, 0xff9a84);
+          for (const x of [21, 32]) { g.lineBetween(x - 2, 28 + bob, x + 2, 33 + bob); g.lineBetween(x + 2, 28 + bob, x - 2, 33 + bob); }
         } else if (pose === 'idle' && frame === 3) {
-          g.lineBetween(19, 32 + bob, 23, 32 + bob); g.lineBetween(30, 32 + bob, 34, 32 + bob);
+          g.fillRoundedRect(18, 30 + bob, 6, 2, 1); g.fillRoundedRect(29, 30 + bob, 6, 2, 1);
         } else {
-          g.fillStyle(0x354d4b); g.fillEllipse(22 + lean, 32 + bob, 4, pose === 'fall' ? 7 : 6); g.fillEllipse(33 + lean, 32 + bob, 4, 6);
+          const eyeHeight = pose === 'fall' ? 8 : pose === 'jump' ? 7 : 5;
+          g.fillRoundedRect(19, 27 + bob, 4, eyeHeight, 2); g.fillRoundedRect(30, 27 + bob, 4, eyeHeight, 2);
         }
-        g.lineBetween(25 + lean, 39 + bob, 29 + lean, pose === 'jump' ? 41 + bob : 39 + bob);
-        g.fillStyle(0xf7b768); g.fillRoundedRect(9 + lean, 41 + bob, 9, 6, 3);
-        if (pose === 'jump') { g.fillStyle(0xffedc7); g.fillCircle(40, 25, 4); }
+        g.lineStyle(2, 0x71818a); g.lineBetween(25, 16 + bob, 25, 10 + bob);
+        g.fillStyle(orange); g.fillCircle(25, 9 + bob, 3);
+        g.fillStyle(0xffedb7); g.fillCircle(25, 8 + bob, 1);
+        // Small side grippers lift for take-off and open during descent.
+        const armY = pose === 'jump' ? 24 : pose === 'fall' ? 38 : 34;
+        g.fillStyle(0x87929a); g.fillRoundedRect(1, armY + bob, 6, 10, 3); g.fillRoundedRect(41, armY + bob, 6, 10, 3);
       });
     }
-    scene.anims.create({ key: `moss-${pose}`, frames: Array.from({ length: count }, (_, i) => ({ key: `moss-${pose}-${i}` })), frameRate: pose === 'idle' ? 4 : pose === 'dash' ? 18 : 10, repeat: -1 });
+    scene.anims.create({ key: `robot-${pose}`, frames: Array.from({ length: count }, (_, i) => ({ key: `robot-${pose}-${i}` })), frameRate: pose === 'idle' ? 4 : pose === 'run' ? 48 : pose === 'dash' ? 24 : 8, repeat: -1 });
   }
   for (let frame = 0; frame < 6; frame++) {
     save(`coin-${frame}`, 28, 28, () => {
@@ -75,6 +105,38 @@ export function createTextures(scene: Phaser.Scene) {
     });
   }
   scene.anims.create({ key: 'enemy-walk', frames: Array.from({ length: 4 }, (_, i) => ({ key: `enemy-${i}` })), frameRate: 7, repeat: -1 });
+  for (const kind of ['fly', 'charge']) {
+    for (let frame = 0; frame < 4; frame++) {
+      save(`enemy-${kind}-${frame}`, kind === 'fly' ? 56 : 44, 42, () => {
+        const cx = kind === 'fly' ? 28 : 22;
+        if (kind === 'fly') {
+          g.fillStyle(0xd4f5e9); g.fillEllipse(9, 12 + frame % 2 * 5, 18, 7); g.fillEllipse(47, 12 + frame % 2 * 5, 18, 7);
+          g.fillStyle(0x4f938c); g.fillRoundedRect(12, 10, 32, 28, 12);
+          g.fillStyle(0x93dac4); g.fillEllipse(28, 15, 31, 16);
+          g.lineStyle(2, 0xe1fff1); g.lineBetween(24, 7, 32, 7);
+        } else {
+          g.fillStyle(0x675469); g.fillRoundedRect(3, 31, 38, 9, 4);
+          g.fillStyle(0xb57762); g.fillRoundedRect(4, 8, 36, 28, 10);
+          g.fillStyle(0xf3bd75); g.fillRoundedRect(6, 8, 32, 7, 3);
+          g.fillStyle(0x55495f); g.fillTriangle(5, 7, 8, 18, 14, 12); g.fillTriangle(39, 7, 36, 18, 30, 12);
+        }
+        g.fillStyle(0x263d48); g.fillRoundedRect(cx - 11, 20, 22, 12, 5);
+        g.fillStyle(kind === 'fly' ? 0xddfff2 : 0xffe1a4); g.fillCircle(cx - 5, 25, 2); g.fillCircle(cx + 5, 25, 2);
+      });
+    }
+    scene.anims.create({ key: `enemy-${kind}`, frames: Array.from({ length: 4 }, (_, i) => ({ key: `enemy-${kind}-${i}` })), frameRate: kind === 'fly' ? 12 : 6, repeat: -1 });
+  }
+  save('reward-star', 38, 38, () => {
+    g.fillStyle(0xffd578); g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const angle = i * Math.PI / 5 - Math.PI / 2;
+      const radius = i % 2 === 0 ? 18 : 9;
+      const x = 19 + Math.cos(angle) * radius; const y = 19 + Math.sin(angle) * radius;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.closePath(); g.fillPath();
+    g.fillStyle(0xfff7cb); g.fillCircle(16, 13, 4);
+  });
   save('spike-art', 36, 30, () => {
     g.fillStyle(0x804b61); g.fillRoundedRect(0, 25, 36, 5, 2);
     g.fillStyle(0xe38b9f); g.fillTriangle(2, 27, 18, 1, 34, 27);
@@ -105,15 +167,44 @@ export function createTextures(scene: Phaser.Scene) {
 
 export function createBackground(scene: Phaser.Scene, index: number, worldWidth: number) {
   const theme = THEMES[index];
+  const chunks: { graphic: Phaser.GameObjects.Graphics; left: number; right: number; factor: number }[] = [];
+  const track = (graphic: Phaser.GameObjects.Graphics, left: number, right: number, factor = 1) => {
+    chunks.push({ graphic, left, right, factor });
+  };
+  const cull = () => {
+    const camera = scene.cameras.main;
+    const width = camera.width / camera.zoom;
+    for (const chunk of chunks) {
+      const left = camera.scrollX * chunk.factor;
+      chunk.graphic.setVisible(chunk.right >= left - 256 && chunk.left <= left + width + 256);
+    }
+  };
+  scene.events.on(Phaser.Scenes.Events.PRE_RENDER, cull);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.PRE_RENDER, cull));
+  // Graphics renderers replay paths every frame. Keep original geometry/order,
+  // but split long scenery into bounded chunks so offscreen paths are skipped.
+  const layerChunks = (depth: number, factor: number, color: number, alpha = 1) => {
+    const graphics = new Map<number, Phaser.GameObjects.Graphics>();
+    return (x: number) => {
+      const key = Math.floor(x / 1024);
+      let g = graphics.get(key);
+      if (!g) {
+        g = scene.add.graphics().setDepth(depth).setScrollFactor(factor, 1);
+        g.fillStyle(color, alpha);
+        graphics.set(key, g);
+        track(g, key * 1024 - 320, (key + 1) * 1024 + 400, factor);
+      }
+      return g;
+    };
+  };
   scene.cameras.main.setBackgroundColor(theme.sky);
   const horizon = scene.add.graphics().setDepth(-30).setScrollFactor(0);
   horizon.fillStyle(index === 2 ? 0xa55358 : 0xf9f2cd, 0.65);
   horizon.fillCircle(120, 155, index === 2 ? 48 : 34);
   for (let layer = 0; layer < 2; layer++) {
-    const g = scene.add.graphics().setDepth(-20 + layer).setScrollFactor(layer === 0 ? 0.18 : 0.43, 1);
-    const color = layer === 0 ? theme.far : theme.near;
-    g.fillStyle(color);
+    const graphicAt = layerChunks(-20 + layer, layer === 0 ? 0.18 : 0.43, layer === 0 ? theme.far : theme.near);
     for (let x = -400; x < worldWidth + 2400; x += layer === 0 ? 260 : 160) {
+      const g = graphicAt(x);
       const y = 350 + Math.sin(x * 0.014) * 45 + layer * 70;
       if (index === 0) {
         g.fillEllipse(x + 100, y + 100, layer === 0 ? 480 : 330, 240); g.fillRect(x, y + 100, 270, 350);
@@ -126,16 +217,22 @@ export function createBackground(scene: Phaser.Scene, index: number, worldWidth:
       }
     }
   }
-  const detail = scene.add.graphics().setDepth(-5).setScrollFactor(0.65, 1);
   if (index === 0) {
-    detail.fillStyle(0xffffff, 0.7);
-    for (let x = 80; x < worldWidth + 2400; x += 310) { detail.fillEllipse(x, 180 + Math.sin(x) * 30, 100, 22); detail.fillEllipse(x - 16, 166 + Math.sin(x) * 30, 52, 30); }
+    const graphicAt = layerChunks(-5, 0.65, 0xffffff, 0.7);
+    for (let x = 80; x < worldWidth + 2400; x += 310) {
+      const g = graphicAt(x);
+      g.fillEllipse(x, 180 + Math.sin(x) * 30, 100, 22); g.fillEllipse(x - 16, 166 + Math.sin(x) * 30, 52, 30);
+    }
   } else if (index === 1) {
-    detail.fillStyle(0xe0f7b1, 0.65);
-    for (let x = 50; x < worldWidth + 2400; x += 90) detail.fillCircle(x, 220 + Math.sin(x) * 140, 2);
+    const graphicAt = layerChunks(-5, 0.65, 0xe0f7b1, 0.65);
+    for (let x = 50; x < worldWidth + 2400; x += 90) graphicAt(x).fillCircle(x, 220 + Math.sin(x) * 140, 2);
   } else {
-    detail.fillStyle(0xe2684d); detail.fillRect(-400, 565, worldWidth + 3200, 60);
-    detail.fillStyle(0xffbd70); for (let x = -400; x < worldWidth + 2400; x += 80) detail.fillEllipse(x, 568, 110, 12);
-    detail.fillStyle(0xffce80, 0.7); for (let x = 0; x < worldWidth + 2400; x += 130) detail.fillCircle(x, 260 + Math.sin(x) * 210, 2);
+    const lavaAt = layerChunks(-5, 0.65, 0xe2684d);
+    for (let x = -400; x < worldWidth + 2800; x += 1024) lavaAt(x).fillRect(x, 565, Math.min(1024, worldWidth + 2800 - x), 60);
+    const rippleAt = layerChunks(-5, 0.65, 0xffbd70);
+    for (let x = -400; x < worldWidth + 2400; x += 80) rippleAt(x).fillEllipse(x, 568, 110, 12);
+    const sparkAt = layerChunks(-5, 0.65, 0xffce80, 0.7);
+    for (let x = 0; x < worldWidth + 2400; x += 130) sparkAt(x).fillCircle(x, 260 + Math.sin(x) * 210, 2);
   }
+  return track;
 }
