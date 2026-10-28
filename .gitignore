@@ -1,4 +1,6 @@
 # Logs
+.vercel/
+*.ait
 logs
 *.log
 npm-debug.log*
@@ -147,3 +149,4 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+.vercel

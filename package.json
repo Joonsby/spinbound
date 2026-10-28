@@ -1,0 +1,25 @@
+{
+  "name": "sonic-runner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "dev:toss": "vite --host 0.0.0.0 --mode toss",
+    "build:toss": "npm run build && ait build"
+  },
+  "dependencies": {
+    "@apps-in-toss/web-framework": "3.9.0",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@apps-in-toss/devtools": "3.9.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
