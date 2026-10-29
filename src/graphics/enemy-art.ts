@@ -6,7 +6,7 @@ import { ROBOT_PARTS } from './asset-manifest';
 import type { EnemyKind } from '../stages';
 
 // TEMPORARY ART: code-painted monsters after the reference sheet
-// (slime = patrol, bat = fly, hedgehog = charger) plus the boss drone.
+// (slime = patrol, bat = fly, hedgehog = charger).
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -17,7 +17,6 @@ export const ENEMY_KEYS = {
   hedgehog: 'enemy-hedgehog',
   alert: 'enemy-alert',
   dizzy: 'enemy-dizzy',
-  drone: 'boss-drone',
 };
 
 function eye(ctx: Ctx, x: number, y: number, rx: number, ry: number, lookX = 1) {
@@ -161,22 +160,6 @@ function paintDizzy(ctx: Ctx) {
   }
 }
 
-function paintDrone(ctx: Ctx) {
-  ellipse(ctx, 16, 4, 11, 2.6);
-  fillStroke(ctx, '#4A5466', 1.4);
-  roundRect(ctx, 14.5, 4, 3, 6, 1);
-  ctx.fillStyle = '#4A5466';
-  ctx.fill();
-  ellipse(ctx, 16, 17, 11, 10);
-  fillStroke(ctx, radial(ctx, 16, 17, 12, [[0, '#E1E6EC'], [0.6, '#9AA3AE'], [1, '#5E6876']], 12, 13, 0), 2);
-  glow(ctx, 19, 17, 7, '#FFD447', 0.5);
-  ellipse(ctx, 19, 17, 4.2, 4.2);
-  fillStroke(ctx, radial(ctx, 19, 17, 4.2, [[0, '#FFF6C4'], [1, '#F0A81C']]), 1.4);
-  ellipse(ctx, 20, 17, 1.6, 1.6);
-  ctx.fillStyle = INK;
-  ctx.fill();
-}
-
 export function createEnemyArt(scene: Phaser.Scene) {
   bake(scene, ENEMY_KEYS.slime, 44, 36, paintSlime);
   bake(scene, ENEMY_KEYS.batBody, 30, 26, paintBatBody);
@@ -184,7 +167,6 @@ export function createEnemyArt(scene: Phaser.Scene) {
   bake(scene, ENEMY_KEYS.hedgehog, 48, 38, paintHedgehog);
   bake(scene, ENEMY_KEYS.alert, 15, 24, paintAlert);
   bake(scene, ENEMY_KEYS.dizzy, 30, 12, paintDizzy);
-  bake(scene, ENEMY_KEYS.drone, 32, 28, paintDrone);
 }
 
 const fit = (image: Phaser.GameObjects.Image, scale = 1) => image.setScale(scale / artScale(image.texture.key));

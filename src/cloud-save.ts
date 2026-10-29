@@ -18,7 +18,7 @@ class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
   constructor(status: number, body: unknown) {
-    super(`spinbound-api ${status}`);
+    super(`서버 응답 ${status} ${(body as { error?: string } | undefined)?.error ?? ''}`.trim());
     this.status = status;
     this.body = body;
   }
@@ -30,6 +30,19 @@ let running: Promise<void> | undefined;
 let again = false;
 let timer: number | undefined;
 let onRemoteApplied = () => {};
+// Shown in Settings so a failed sync can be read on the device.
+let status: { state: 'off' | 'syncing' | 'synced' | 'error'; detail?: string; at?: Date } = { state: 'off' };
+
+const describe = (error: unknown) => {
+  if (error instanceof Error) return error.name === 'AbortError' ? '응답 시간 초과' : error.message;
+  if (typeof error === 'object' && error !== null) return JSON.stringify(error);
+  return String(error);
+};
+
+const withTimeout = <T>(promise: Promise<T>, label: string) => Promise.race([
+  promise,
+  new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(`${label}: 응답 없음`)), REQUEST_TIMEOUT_MS)),
+]);
 
 function readState(): CloudState {
   try {
@@ -50,7 +63,12 @@ async function request(method: string, path: string, body?: unknown, auth = true
   try {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (auth && state.token) headers.authorization = `Bearer ${state.token}`;
-    const response = await fetch(API_BASE + path, { method, headers, signal: controller.signal, body: body === undefined ? undefined : JSON.stringify(body) });
+    let response: Response;
+    try {
+      response = await fetch(API_BASE + path, { method, headers, signal: controller.signal, body: body === undefined ? undefined : JSON.stringify(body) });
+    } catch (error) {
+      throw new Error(`서버 연결 실패 (${method} ${path}): ${describe(error)}`);
+    }
     const text = await response.text();
     const json: unknown = text ? JSON.parse(text) : undefined;
     if (!response.ok) throw new ApiError(response.status, json);
@@ -61,7 +79,12 @@ async function request(method: string, path: string, body?: unknown, auth = true
 }
 
 async function login() {
-  const { code } = await User.createAnonymousKeyAuthCode();
+  let code: string;
+  try {
+    ({ code } = await withTimeout(User.createAnonymousKeyAuthCode(), '토스 인증 코드'));
+  } catch (error) {
+    throw new Error(`토스 인증 코드 발급 실패: ${describe(error)}`);
+  }
   const session = await request('POST', '/v1/auth/toss', { authCode: code }, false) as { token: string; expiresAt: string };
   state.token = session.token;
   state.tokenExpiresAt = session.expiresAt;
@@ -128,8 +151,14 @@ async function sync() {
 }
 
 function run() {
-  running ??= sync()
-    .catch((error: unknown) => console.warn('[cloud-save] 동기화하지 못했습니다:', error instanceof Error ? error.message : error))
+  if (running) return running;
+  status = { state: 'syncing' };
+  running = sync()
+    .then(() => { status = { state: 'synced', at: new Date() }; })
+    .catch((error: unknown) => {
+      status = { state: 'error', detail: describe(error), at: new Date() };
+      console.warn('[cloud-save] 동기화하지 못했습니다:', status.detail);
+    })
     .finally(() => {
       running = undefined;
       if (again) { again = false; schedule(); }
@@ -142,11 +171,24 @@ function schedule() {
   timer = window.setTimeout(() => { void run(); }, UPLOAD_DELAY_MS);
 }
 
+export function cloudSaveStatusText() {
+  const time = status.at?.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) ?? '';
+  if (status.state === 'off') return '토스 앱에서 실행하면 진행 데이터가 서버에도 저장돼요';
+  if (status.state === 'syncing') return '동기화 중…';
+  if (status.state === 'synced') return `서버에 저장됨 · ${time}`;
+  return `동기화 실패 · ${time} · ${status.detail}`;
+}
+
+export function syncCloudSaveNow() {
+  return status.state === 'off' ? Promise.resolve() : run();
+}
+
 // `refresh` redraws whatever shows the progress after the cloud copy replaced it.
 export function startCloudSave(refresh: () => void) {
   let environment: string;
   try { environment = getOperationalEnvironment(); } catch { return; }
   if (environment !== 'toss' && environment !== 'sandbox') return;
+  status = { state: 'syncing' };
   onRemoteApplied = refresh;
   let lastSaved = JSON.stringify(toSynced(getPlayerProgress()));
   onPlayerProgressSaved((value) => {

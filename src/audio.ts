@@ -1,6 +1,6 @@
 import { getPlayerProgress, savePlayerProgress } from './progress';
 
-export type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'clang' | 'grab' | 'boss-hit' | 'step' | 'death' | 'clear';
+export type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'grab' | 'step' | 'death' | 'clear';
 type Tone = [frequency: number, duration: number, volume: number, type: OscillatorType, endFrequency: number, delay?: number];
 
 const SOUNDS: Record<SoundCue, Tone[]> = {
@@ -14,9 +14,7 @@ const SOUNDS: Record<SoundCue, Tone[]> = {
   boost: [[220, 0.22, 0.04, 'sawtooth', 880]],
   stomp: [[620, 0.1, 0.05, 'square', 180], [900, 0.08, 0.03, 'sine', 1300, 0.04]],
   break: [[150, 0.24, 0.06, 'square', 40], [90, 0.3, 0.05, 'sawtooth', 30, 0.03]],
-  clang: [[1200, 0.12, 0.035, 'square', 900], [1700, 0.1, 0.025, 'triangle', 1500, 0.02]],
   grab: [[340, 0.08, 0.04, 'triangle', 420]],
-  'boss-hit': [[260, 0.26, 0.06, 'square', 60], [700, 0.12, 0.04, 'sine', 300, 0.03]],
   step: [[150, 0.045, 0.016, 'triangle', 95]],
   death: [[520, 0.18, 0.05, 'square', 300], [390, 0.2, 0.05, 'square', 200, 0.16], [260, 0.4, 0.05, 'triangle', 60, 0.34]],
   clear: [[523, 0.14, 0.05, 'triangle', 523], [659, 0.14, 0.05, 'triangle', 659, 0.12], [784, 0.14, 0.05, 'triangle', 784, 0.24], [1047, 0.38, 0.055, 'triangle', 1047, 0.36]],

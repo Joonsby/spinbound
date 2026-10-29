@@ -30,20 +30,18 @@ import { PadSystem } from './mechanics/pads';
 import { MovingPlatforms } from './mechanics/moving-platforms';
 import { SwingRope } from './mechanics/swing-rope';
 import { BreakableWalls } from './mechanics/breakable-walls';
-import { MachineBoss, type BossRecoil } from './boss';
 import { installDebugHooks } from './debug';
 
 const START = { x: 90, y: 440 };
 const CRYSTAL_IDLE_TINT = 0x8fa3b8;
 const FLOOR_TOP = 480;
-const BOSS_STAGE = 2;
 const WALL_HIT_STOP_MS = 40;
 const RULES: ContactRules = {
   stompTolerance: COMBAT.stompTolerance, minStompSpeed: COMBAT.minStompSpeed,
   minClosingSpeed: COMBAT.minClosingSpeed, rollExitSpeed: PHYSICS.rollExitSpeed,
 };
 
-type SceneData = { stageIndex?: number; hp?: number; coinCount?: number; enemyScore?: number; bossTest?: boolean };
+type SceneData = { stageIndex?: number; hp?: number; coinCount?: number; enemyScore?: number };
 
 // Stage orchestration: builds the level, routes contacts to the rule modules and owns HP/score.
 export class GameScene extends Phaser.Scene {
@@ -51,7 +49,6 @@ export class GameScene extends Phaser.Scene {
   private playerStats = getPlayerProgress().stats;
   private robot = getEquippedRobot();
   private stageIndex = 0;
-  private bossTest = false;
   private hp = 3;
   private coinCount = 0;
   private enemyScore = 0;
@@ -83,14 +80,12 @@ export class GameScene extends Phaser.Scene {
   private pads!: PadSystem;
   private platforms!: MovingPlatforms;
   private ropes: SwingRope[] = [];
-  private boss?: MachineBoss;
   private theme!: StageTheme;
 
   init(data: SceneData = {}) {
     this.playerStats = getPlayerProgress().stats;
     this.robot = getEquippedRobot();
-    this.bossTest = data.bossTest === true;
-    this.stageIndex = this.bossTest ? BOSS_STAGE : Phaser.Math.Clamp(Math.floor(data.stageIndex ?? 0), 0, Math.min(STAGES.length, getPlayerProgress().unlockedStage) - 1);
+    this.stageIndex = Phaser.Math.Clamp(Math.floor(data.stageIndex ?? 0), 0, Math.min(STAGES.length, getPlayerProgress().unlockedStage) - 1);
     this.hp = Math.min(data.hp ?? this.playerStats.maxHp, this.playerStats.maxHp);
     this.coinCount = data.coinCount ?? 0;
     this.enemyScore = data.enemyScore ?? 0;
@@ -105,7 +100,6 @@ export class GameScene extends Phaser.Scene {
     this.hitStopUntil = 0;
     this.resultTimer = undefined;
     this.ropes = [];
-    this.boss = undefined;
   }
 
   create() {
@@ -114,8 +108,7 @@ export class GameScene extends Phaser.Scene {
     createPropArt(this);
     createEnemyArt(this);
     const stage = STAGES[this.stageIndex];
-    const spawn = this.bossTest && stage.boss ? { x: stage.boss.entry + 40, y: 450 } : START;
-    if (this.bossTest) this.respawnPoint = spawn;
+    const spawn = START;
     this.hud = new Hud();
     this.hud.hideResult();
     this.audio = new GameAudio(stage.theme);
@@ -153,7 +146,6 @@ export class GameScene extends Phaser.Scene {
     ];
     this.enemies = new EnemySystem(this, enemyConfigs, this.stageIndex === 0);
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
-    if (stage.boss) this.createBoss(stage);
 
     this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width);
     this.cameraControl.follow(spawn.x, spawn.y);
@@ -178,9 +170,8 @@ export class GameScene extends Phaser.Scene {
       this.controls.destroy();
       this.audio.destroy();
       this.effects.destroy();
-      this.boss?.destroy();
       this.hud.nextButton.onclick = null;
-      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'boss-test']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
+      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
       this.hud.hideResult();
     });
     this.bindButtons();
@@ -283,7 +274,7 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({ targets: crystal, y: floor - 28, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       this.physics.add.existing(pole, true);
       this.physics.add.overlap(this.player.sprite, pole, () => {
-        if (this.finished || this.bossTest || index <= this.lastCheckpoint) return;
+        if (this.finished || index <= this.lastCheckpoint) return;
         this.lastCheckpoint = index;
         this.checkpointActive = true;
         this.respawnPoint = point;
@@ -302,49 +293,13 @@ export class GameScene extends Phaser.Scene {
     this.add.image(goalX, goalFloor + 2, PROP_KEYS.goal).setOrigin(0.5, 1).setDepth(DEPTH.prop).setScale(1 / artScale(PROP_KEYS.goal));
     const goal = this.add.rectangle(goalX, goalY, 44, 120, 0x60dfb1, 0);
     this.physics.add.existing(goal, true);
-    this.physics.add.overlap(this.player.sprite, goal, () => {
-      if (!this.boss || this.boss.defeated) this.endStage(true);
-    });
-    if (stage.boss) this.addSign(goalX - 10, goalFloor - 190, '보스를 처치하면 클리어');
-  }
-
-  private createBoss(stage: StageData) {
-    this.boss = new MachineBoss(this, stage.boss!, this.player.sprite, this.effects, {
-      contact: (body) => classifyContact(this.player.contactBox(), this.player.rolling, this.toBox(body), RULES),
-      hurt: (x) => { this.takeHit(x); },
-      recoil: (x, kind) => this.bossRecoil(x, kind),
-      struck: (x, y) => {
-        this.audio.play('boss-hit');
-        this.effects.bigImpact(x, y);
-        this.cameras.main.shake(110, 0.005);
-        this.hitStop(COMBAT.bossHitStopMs);
-      },
-      minionDown: (x, y) => {
-        this.enemyScore += COMBAT.enemyScore;
-        this.updateScore();
-        this.audio.play('enemy');
-        this.effects.impact(x, y, 0x94dcca);
-        this.effects.popup(x, y - 26, `+${COMBAT.enemyScore}`);
-      },
-      defeated: (x, y) => {
-        this.enemyScore += COMBAT.bossScore;
-        this.updateScore(); this.audio.play('enemy'); this.effects.bigImpact(x, y); this.effects.popup(x, y - 60, `+${COMBAT.bossScore}`);
-        this.endStage(true);
-      },
-      damagePerHit: this.playerStats.attack,
-      frameArena: (left, right, ground) => this.cameraControl.frameArena(left, right, ground),
-      releaseCamera: () => this.cameraControl.release(this.player.x, this.player.y),
-    });
+    this.physics.add.overlap(this.player.sprite, goal, () => this.endStage(true));
   }
 
   private bindButtons() {
     const button = (id: string) => document.querySelector<HTMLButtonElement>(`#${id}`)!;
     button('restart').onclick = () => this.restartGame();
-    button('result-restart').onclick = () => this.restartGame(this.hp === 0 || this.bossTest);
-    button('boss-test').onclick = () => {
-      this.resetInput(); this.finished = true; this.hud.hideResult();
-      this.scene.restart({ stageIndex: BOSS_STAGE, bossTest: true });
-    };
+    button('result-restart').onclick = () => this.restartGame(this.hp === 0);
     const returnToLobby = () => {
       this.resetInput(); this.finished = true; this.hud.hideResult();
       this.scene.start('MainMenuScene');
@@ -352,7 +307,7 @@ export class GameScene extends Phaser.Scene {
     button('lobby').onclick = returnToLobby;
     button('result-lobby').onclick = returnToLobby;
     this.hud.nextButton.onclick = () => {
-      if (!this.finished || this.bossTest || this.hp <= 0 || this.stageIndex >= STAGES.length - 1) return;
+      if (!this.finished || this.hp <= 0 || this.stageIndex >= STAGES.length - 1) return;
       this.resetInput();
       this.hud.hideResult();
       this.scene.restart({ stageIndex: this.stageIndex + 1, hp: this.hp, coinCount: this.coinCount, enemyScore: this.enemyScore });
@@ -388,17 +343,6 @@ export class GameScene extends Phaser.Scene {
       this.enemyScore += COMBAT.enemyScore;
       this.updateScore();
       this.hitStop(COMBAT.hitStopMs);
-    }
-  }
-
-  private bossRecoil(x: number, kind: BossRecoil) {
-    const now = this.time.now;
-    if (kind === 'stomp' || kind === 'clang-top') this.player.stompBounce(now, this.frameInput.jumpHeld);
-    else if (kind === 'push') this.player.recoil(now, x, 180, 160);
-    else this.player.recoil(now, x, 260, 260);
-    if (kind === 'clang' || kind === 'clang-top') {
-      this.audio.play('clang');
-      this.effects.burst(this.player.x + (x > this.player.x ? 16 : -16), this.player.y, 0xfff0c8, 8, 150);
     }
   }
 
@@ -456,7 +400,6 @@ export class GameScene extends Phaser.Scene {
       hp: this.playerStats.maxHp,
       coinCount: retryCurrentStage ? this.stageStartCoins : 0,
       enemyScore: retryCurrentStage ? this.stageStartEnemyScore : 0,
-      bossTest: this.bossTest,
     });
   }
 
@@ -464,7 +407,6 @@ export class GameScene extends Phaser.Scene {
     if (this.finished) return;
     const now = this.time.now;
     this.deaths += 1;
-    this.boss?.reset();
     this.detachRopes();
     this.ropes.forEach((rope) => rope.reset());
     this.resetInput();
@@ -473,7 +415,6 @@ export class GameScene extends Phaser.Scene {
     this.rig.reset();
     this.wasRolling = false;
     this.effects.clear();
-    this.cameraControl.release(spawn.x, spawn.y);
     this.cameraControl.snap(spawn.x, spawn.y, 1);
     this.hud.setStatus(`${this.checkpointActive ? '체크포인트' : '시작 지점'}에서 부활 · ${this.deaths}회`);
   }
@@ -508,8 +449,6 @@ export class GameScene extends Phaser.Scene {
 
   private endStage(cleared: boolean) {
     if (this.finished) return;
-    if (!cleared) this.boss?.reset();
-    this.boss?.halt();
     this.finished = true;
     this.hitStopUntil = 0;
     this.resetInput();
@@ -520,15 +459,15 @@ export class GameScene extends Phaser.Scene {
     this.audio.stopMusic();
     this.audio.play(cleared ? 'clear' : 'death');
     const allCleared = cleared && this.stageIndex === STAGES.length - 1;
-    if (cleared && !this.bossTest) unlockNextStage(this.stageIndex + 1, STAGES.length);
+    if (cleared) unlockNextStage(this.stageIndex + 1, STAGES.length);
     this.hud.setStatus(cleared ? (allCleared ? '전체 스테이지 클리어! 축하합니다' : `Stage ${this.stageIndex + 1} 클리어!`) : 'HP가 모두 소진되었습니다');
     const showResult = () => this.hud.showResult(
       cleared ? 'clear' : 'over',
       cleared ? (allCleared ? 'ALL CLEAR!' : 'STAGE CLEAR!') : 'GAME OVER',
       this.coinCount * COMBAT.coinScore + this.enemyScore,
       this.coinCount,
-      cleared && !allCleared && !this.bossTest,
-      this.bossTest ? '보스 재도전' : cleared ? 'Stage 1부터 다시 시작' : `Stage ${this.stageIndex + 1}에서 부활 (HP ${this.playerStats.maxHp})`,
+      cleared && !allCleared,
+      cleared ? 'Stage 1부터 다시 시작' : `Stage ${this.stageIndex + 1}에서 부활 (HP ${this.playerStats.maxHp})`,
     );
     if (cleared) { this.cameraControl.celebrate(this); this.effects.confetti(this.player.x, this.player.y - 20); }
     else this.effects.burst(this.player.x, this.player.y, 0xd7dde0, 12, 120);
@@ -563,7 +502,6 @@ export class GameScene extends Phaser.Scene {
       rope.update(now, delta, player, rope.held ? input.direction : 0);
       if (!rope.held && rope.tryGrab(player, now)) { this.audio.play('grab'); this.rig.event('grab'); }
     }
-    this.boss?.update(now);
     this.platforms.update();
     this.pads.update();
     const view = this.cameras.main.worldView;
@@ -654,7 +592,6 @@ export class GameScene extends Phaser.Scene {
       enemiesAlive: this.enemies.list.filter((enemy) => enemy.sprite.active).length,
       enemies: this.enemies.list.filter((enemy) => enemy.sprite.active)
         .map((enemy) => ({ kind: enemy.kind, x: Math.round(enemy.body.center.x), y: Math.round(enemy.body.center.y), hp: enemy.hp, state: enemy.state })),
-      boss: this.boss?.snapshot,
     };
   }
 }

@@ -8,6 +8,7 @@ import { themeForStage } from './graphics/themes';
 import { configureQuality, qualityLevel, type QualitySetting } from './graphics/quality';
 import { unbakeAll } from './graphics/art';
 import { APPLY_DISPLAY_EVENT } from './graphics/display';
+import { cloudSaveStatusText, syncCloudSaveNow } from './cloud-save';
 
 type Screen = 'stages' | 'stats' | 'characters' | 'inventory' | 'settings';
 const QUALITY_LABELS: Record<QualitySetting, string> = { auto: '자동', low: '낮음', medium: '보통', high: '높음' };
@@ -21,13 +22,12 @@ function mount(scene: Phaser.Scene, title: string, content: string, action: (but
   document.body.style.removeProperty('--accent');
   scene.cameras.main.setBackgroundColor('#1d2a44');
   const root = document.createElement('section'); root.id = 'menu-root'; root.setAttribute('aria-label', title);
-  root.innerHTML = `<div class="menu-shell"><header class="menu-heading"><h1>${title}</h1><div class="menu-top-actions"><button type="button" data-action="boss">${icon('boss')}보스 테스트</button><button type="button" data-action="home">${icon('home')}메인 로비</button></div></header><div class="menu-content">${content}</div></div>`;
+  root.innerHTML = `<div class="menu-shell"><header class="menu-heading"><h1>${title}</h1><div class="menu-top-actions"><button type="button" data-action="home">${icon('home')}메인 로비</button></div></header><div class="menu-content">${content}</div></div>`;
   document.body.append(root);
   const click = (event: MouseEvent) => {
     const button = (event.target as Element).closest<HTMLButtonElement>('button');
     if (!button || button.disabled) return;
-    if (button.dataset.action === 'boss') scene.scene.start('GameScene', { stageIndex: 2, bossTest: true });
-    else if (button.dataset.action === 'home') scene.scene.start('MainMenuScene');
+    if (button.dataset.action === 'home') scene.scene.start('MainMenuScene');
     else action(button);
   };
   root.addEventListener('click', click);
@@ -51,7 +51,7 @@ function robotImage(scene: Phaser.Scene, id = getEquippedRobot().id) {
 function stageCard(stage: StageData, index: number, unlocked: number) {
   const status = index + 1 > unlocked ? 'locked' : index + 1 < unlocked ? 'cleared' : 'current';
   const label = status === 'locked' ? `${icon('lock')}잠김` : status === 'cleared' ? `${icon('check')}클리어` : '도전!';
-  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${stage.boss ? '<span class="stage-boss">BOSS</span>' : ''}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : stage.name}</span><span class="stage-status">${label}</span></button>`;
+  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span></span><span class="stage-name">${status === 'locked' ? '? ? ?' : stage.name}</span><span class="stage-status">${label}</span></button>`;
 }
 
 // Thumbnail colours come from the stage themes (set through CSSOM, no inline style markup).
@@ -93,7 +93,7 @@ export class MenuScreenScene extends Phaser.Scene {
     if (this.screen === 'stats') content = `<article class="menu-panel"><h2>현재 능력치</h2><dl class="stat-list"><div><dt>${icon('attack')}공격력</dt><dd>${player.stats.attack}</dd></div><div><dt>${icon('shield')}방어력</dt><dd>${player.stats.defense}%</dd></div><div><dt>${icon('heart')}HP</dt><dd>${player.stats.maxHp}</dd></div></dl><p>강화 구매는 준비 중입니다.</p></article>`;
     if (this.screen === 'characters') content = `<div class="robot-roster">${ROBOTS.filter((robot) => player.ownedCharacters.includes(robot.id)).map((robot) => `<article class="robot-card${player.equippedCharacter === robot.id ? ' equipped' : ''}">${robotImage(this, robot.id)}<h2>${robot.name}</h2><button data-robot="${robot.id}" ${player.equippedCharacter === robot.id ? 'disabled' : ''}>${player.equippedCharacter === robot.id ? '장착 중' : '선택'}</button></article>`).join('')}</div>`;
     if (this.screen === 'inventory') content = `<article class="menu-panel"><h2>보유 아이템 ${player.items.length}개</h2>${player.items.length ? `<ul class="item-grid">${player.items.map((id) => `<li>${icon('box')}${ITEMS[id]}</li>`).join('')}</ul>` : `<div class="empty-state">${icon('box')}<p>보유한 아이템이 없습니다.</p></div>`}</article>`;
-    if (this.screen === 'settings') content = `<article class="menu-panel settings-panel"><section class="setting"><h2>${icon('sound-on')}사운드</h2><button data-action="sound" aria-pressed="${getSoundEnabled()}">사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}</button></section><section class="setting"><h2>${icon('settings')}그래픽 품질</h2><div class="segmented" role="group" aria-label="그래픽 품질">${QUALITY_OPTIONS.map((value) => `<button data-quality="${value}" aria-pressed="${player.graphicsQuality === value}">${QUALITY_LABELS[value]}</button>`).join('')}</div><p>현재 적용 ${QUALITY_LABELS[qualityLevel()]} · 낮음은 배경 레이어와 효과 수를 줄입니다</p></section></article>`;
+    if (this.screen === 'settings') content = `<article class="menu-panel settings-panel"><section class="setting"><h2>${icon('sound-on')}사운드</h2><button data-action="sound" aria-pressed="${getSoundEnabled()}">사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}</button></section><section class="setting"><h2>${icon('settings')}그래픽 품질</h2><div class="segmented" role="group" aria-label="그래픽 품질">${QUALITY_OPTIONS.map((value) => `<button data-quality="${value}" aria-pressed="${player.graphicsQuality === value}">${QUALITY_LABELS[value]}</button>`).join('')}</div><p>현재 적용 ${QUALITY_LABELS[qualityLevel()]} · 낮음은 배경 레이어와 효과 수를 줄입니다</p></section><section class="setting"><h2>${icon('box')}클라우드 저장</h2><p data-cloud-status>${cloudSaveStatusText()}</p><button data-action="cloud-sync">지금 동기화</button></section></article>`;
     const root = mount(this, titles[this.screen], content, (button) => {
       if (button.dataset.stage !== undefined) {
         const stageIndex = Number(button.dataset.stage);
@@ -102,6 +102,11 @@ export class MenuScreenScene extends Phaser.Scene {
         player.equippedCharacter = button.dataset.robot; savePlayerProgress(player); this.scene.restart({ screen: this.screen });
       } else if (button.dataset.action === 'sound') {
         setSoundEnabled(!getSoundEnabled()); button.textContent = `사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}`; button.setAttribute('aria-pressed', String(getSoundEnabled()));
+      } else if (button.dataset.action === 'cloud-sync') {
+        const text = root.querySelector('[data-cloud-status]')!;
+        button.disabled = true;
+        text.textContent = '동기화 중…';
+        void syncCloudSaveNow().finally(() => { button.disabled = false; text.textContent = cloudSaveStatusText(); });
       } else if (button.dataset.quality) {
         const value = button.dataset.quality as QualitySetting;
         if (!QUALITY_OPTIONS.includes(value) || value === player.graphicsQuality) return;

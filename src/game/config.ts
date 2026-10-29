@@ -45,10 +45,8 @@ export const COMBAT = {
   recoilLift: 240,
   enemyHitCooldownMs: 350,
   hitStopMs: 50,
-  bossHitStopMs: 90,
   coinScore: 100,
   enemyScore: 200,
-  bossScore: 2000,
   enemySpeed: 65,
   chargeSpeed: 210,
   // Damage is player attack (default 10) per hit; a recovering charger takes double.
@@ -73,18 +71,3 @@ export const GIMMICK = {
   ropeMaxReleaseUp: 700,
 };
 
-export const BOSS = {
-  maxHp: 60,
-  phaseHp: [40, 20],
-  warningMs: [1000, 950, 850],
-  exposedMs: [2800, 2500, 2200],
-  recoverMs: 900,
-  chargeSpeed: [380, 450, 520],
-  waveSpeed: [260, 290, 320],
-  droneCount: [2, 2, 3],
-  droneHp: 10,
-  droneLifeMs: 9000,
-  debrisCount: [3, 2, 3],
-  debrisLifeMs: 2500,
-  hitCooldownMs: 600,
-};
