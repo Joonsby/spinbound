@@ -69,6 +69,12 @@ export const ECONOMY = {
 };
 export type EconomyTuning = typeof ECONOMY;
 
+// Pre-stage items (ITEMS in progress.ts).
+export const BOOSTS = {
+  // Coins this close to the robot fly in on their own.
+  magnetRadius: 150,
+};
+
 export const GIMMICK = {
   springSpeed: 820,
   springDiagonalX: 420,

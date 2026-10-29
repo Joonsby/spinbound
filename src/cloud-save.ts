@@ -109,14 +109,15 @@ function apply(next: PlayerProgress) {
   onRemoteApplied();
 }
 
-// Server copy wins while nothing changed here since the last sync; otherwise the two merge.
+// Server copy wins while nothing changed here since the last sync; this copy wins while the server is
+// unchanged (so spent coins and used items stay spent); when both changed, the two merge.
 // The result is uploaded based on the server's version, and a lost race (409) merges again.
 async function reconcile(remote: Remote | undefined, attempt = 0): Promise<void> {
   const local = getPlayerProgress();
   let target = local;
   if (remote) {
     const remoteProgress = recoverPlayerProgress({ ...(remote.data as object), soundEnabled: local.soundEnabled, graphicsQuality: local.graphicsQuality });
-    target = state.dirty ? mergeProgress(local, toSynced(remoteProgress)) : remoteProgress;
+    target = !state.dirty ? remoteProgress : remote.version === state.serverVersion ? local : mergeProgress(local, toSynced(remoteProgress));
     if (!sameProgress(target, local)) apply(target);
     if (sameProgress(target, remoteProgress)) {
       state.serverVersion = remote.version;

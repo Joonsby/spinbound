@@ -1,8 +1,16 @@
 import type { QualitySetting } from './graphics/quality';
+import { buyItem as payForItem, takeItems } from './game/economy';
 
 export const ROBOTS = [{ id: 'orange-01', name: '오렌지-01', texture: 'robot-portrait', blinkTexture: 'robot-portrait-blink' }];
 const QUALITY_SETTINGS: QualitySetting[] = ['auto', 'low', 'medium', 'high'];
-export const ITEMS: Record<string, string> = { 'repair-kit': '수리 키트', 'energy-cell': '에너지 셀' };
+// Single-stage items bought with coins before a stage; each start uses one of every chosen item.
+export const ITEMS = {
+  shield: { name: '보호막', description: '첫 피격 1회를 막아요', price: 30 },
+  'extra-heart': { name: '추가 하트', description: '이번 판 최대 HP +1', price: 40 },
+  magnet: { name: '코인 자석', description: '가까운 코인을 끌어와요', price: 25 },
+} as const;
+export type ItemId = keyof typeof ITEMS;
+export const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 export type PlayerProgress = {
   version: 1;
   level: number;
@@ -59,6 +67,20 @@ export function addCurrency(amount: number) {
   data.currency += amount;
   savePlayerProgress(data);
   return getPlayerProgress().currency;
+}
+export const itemCount = (id: ItemId) => getPlayerProgress().items.filter((item) => item === id).length;
+export function buyItem(id: ItemId) {
+  const data = getPlayerProgress();
+  if (!payForItem(data, id, ITEMS[id].price)) return false;
+  savePlayerProgress(data);
+  return true;
+}
+// Removes one of each chosen item from the bag; returns the ones actually used.
+export function useItems(chosen: readonly ItemId[]) {
+  const data = getPlayerProgress();
+  const used = takeItems(data.items, chosen) as ItemId[];
+  if (used.length) savePlayerProgress(data);
+  return used;
 }
 // Returns false (and spends nothing) when the balance is too low.
 export function spendCurrency(amount: number) {

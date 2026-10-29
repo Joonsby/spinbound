@@ -14,9 +14,9 @@ import { GameEffects } from '../effects';
 import { bindAppEnvironment } from '../app-environment';
 import { installPerformanceDiagnostics } from '../performance';
 import { installFpsWatchdog } from '../graphics/fps-watchdog';
-import { addCurrency, getEquippedRobot, getPlayerProgress, spendCurrency, unlockNextStage } from '../progress';
+import { addCurrency, getEquippedRobot, getPlayerProgress, spendCurrency, unlockNextStage, type ItemId } from '../progress';
 import { showRewardedAd } from '../ads';
-import { COMBAT, ECONOMY, GIMMICK, PHYSICS } from './config';
+import { BOOSTS, COMBAT, ECONOMY, GIMMICK, PHYSICS } from './config';
 import { clearReward, reviveOffer } from './economy';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
 import { InputController, type Control, type InputFrame } from './input';
@@ -44,7 +44,7 @@ const RULES: ContactRules = {
   minClosingSpeed: COMBAT.minClosingSpeed, rollExitSpeed: PHYSICS.rollExitSpeed,
 };
 
-type SceneData = { stageIndex?: number; hp?: number; coinCount?: number; enemyScore?: number };
+export type SceneData = { stageIndex?: number; hp?: number; coinCount?: number; enemyScore?: number; boosts?: ItemId[] };
 
 // Stage orchestration: builds the level, routes contacts to the rule modules and owns HP/score.
 export class GameScene extends Phaser.Scene {
@@ -53,6 +53,11 @@ export class GameScene extends Phaser.Scene {
   private robot = getEquippedRobot();
   private stageIndex = 0;
   private hp = 3;
+  private maxHp = 3;
+  private shield = false;
+  private magnet = false;
+  private shieldBubble?: Phaser.GameObjects.Arc;
+  private coinList: Phaser.GameObjects.Arc[] = [];
   private coinCount = 0;
   private enemyScore = 0;
   private stageStartCoins = 0;
@@ -93,7 +98,14 @@ export class GameScene extends Phaser.Scene {
     this.playerStats = getPlayerProgress().stats;
     this.robot = getEquippedRobot();
     this.stageIndex = Phaser.Math.Clamp(Math.floor(data.stageIndex ?? 0), 0, Math.min(STAGES.length, getPlayerProgress().unlockedStage) - 1);
-    this.hp = Math.min(data.hp ?? this.playerStats.maxHp, this.playerStats.maxHp);
+    const boosts = new Set(data.boosts ?? []);
+    this.shield = boosts.has('shield');
+    this.magnet = boosts.has('magnet');
+    const extraHp = boosts.has('extra-heart') ? 1 : 0;
+    this.maxHp = this.playerStats.maxHp + extraHp;
+    this.hp = Math.min(data.hp ?? this.playerStats.maxHp, this.playerStats.maxHp) + extraHp;
+    this.shieldBubble = undefined;
+    this.coinList = [];
     this.coinCount = data.coinCount ?? 0;
     this.enemyScore = data.enemyScore ?? 0;
     this.stageStartCoins = this.coinCount;
@@ -138,6 +150,8 @@ export class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, spawn.x, spawn.y);
     this.rig = new RobotRig(this, spawn.x, spawn.y + 21);
+    if (this.shield) this.shieldBubble = this.add.circle(spawn.x, spawn.y, 34, 0x5cf2ff, 0.12).setStrokeStyle(3, 0x5cf2ff, 0.85).setDepth(DEPTH.player + 0.5);
+    this.hud.setBoosts(this.shield, this.magnet);
     this.wasRolling = false;
     this.surfaces = [...stage.platforms, ...(stage.oneWayPlatforms ?? [])]
       .map(([x, y, width, height]) => ({ left: x - width / 2, right: x + width / 2, top: y - height / 2 }));
@@ -229,17 +243,8 @@ export class GameScene extends Phaser.Scene {
       this.visuals.attach(coin, PROP_KEYS.coin(0), 28, 28).setDepth(DEPTH.pickup).play({ key: PROP_KEYS.coinSpin, startFrame: index % COIN_FRAMES });
     });
     this.updateScore();
-    this.physics.add.overlap(this.player.sprite, coins, (_player, object) => {
-      const coin = object as Phaser.GameObjects.Arc;
-      if (this.finished || !coin.active) return;
-      coin.setActive(false).setVisible(false);
-      (coin.body as Phaser.Physics.Arcade.StaticBody).enable = false;
-      this.coinCount += 1;
-      this.rig.event('happy');
-      this.audio.play('coin');
-      this.effects.coin(coin.x, coin.y);
-      this.updateScore();
-    });
+    this.coinList = coins.getChildren() as Phaser.GameObjects.Arc[];
+    this.physics.add.overlap(this.player.sprite, coins, (_player, object) => this.collectCoin(object as Phaser.GameObjects.Arc));
 
     const hazards = this.physics.add.staticGroup();
     const traps: [number, number][] = [...stage.spikes.map((x): [number, number] => [x, 465]), ...(stage.traps ?? [])];
@@ -359,8 +364,32 @@ export class GameScene extends Phaser.Scene {
       if (!this.finished || this.hp <= 0 || this.stageIndex >= STAGES.length - 1) return;
       this.resetInput();
       this.hud.hideResult();
-      this.scene.restart({ stageIndex: this.stageIndex + 1, hp: this.hp, coinCount: this.coinCount, enemyScore: this.enemyScore });
+      // The next stage starts from the item screen; this run's HP and score come along.
+      this.scene.start('MenuScreenScene', { screen: 'prepare', stageIndex: this.stageIndex + 1, carry: { hp: this.hp, coinCount: this.coinCount, enemyScore: this.enemyScore } });
     };
+  }
+
+  private collectCoin(coin: Phaser.GameObjects.Arc) {
+    if (this.finished || !coin.active) return;
+    coin.setActive(false).setVisible(false);
+    (coin.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    this.coinCount += 1;
+    this.rig.event('happy');
+    this.audio.play('coin');
+    this.effects.coin(coin.x, coin.y);
+    this.updateScore();
+  }
+
+  // Coin magnet: nearby coins are collected and fly into the robot.
+  private pullCoins() {
+    const { x, y } = this.player;
+    const reach = BOOSTS.magnetRadius ** 2;
+    for (const coin of this.coinList) {
+      if (!coin.active || (coin.x - x) ** 2 + (coin.y - y) ** 2 > reach) continue;
+      const fly = this.add.image(coin.x, coin.y, PROP_KEYS.coin(0)).setDisplaySize(28, 28).setDepth(DEPTH.pickup);
+      this.collectCoin(coin);
+      this.tweens.add({ targets: fly, x, y, scale: fly.scale * 0.5, duration: 140, onComplete: () => fly.destroy() });
+    }
   }
 
   private toBox(body: Phaser.Physics.Arcade.Body) {
@@ -438,7 +467,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateScore() {
     this.hud.setScore(this.coinCount * COMBAT.coinScore + this.enemyScore, this.coinCount);
-    this.hud.setHp(this.hp, this.playerStats.maxHp);
+    this.hud.setHp(this.hp, this.maxHp);
   }
 
   private resetInput() {
@@ -485,6 +514,16 @@ export class GameScene extends Phaser.Scene {
     const now = this.time.now;
     if (this.finished || this.player.isInvulnerable(now)) return false;
     this.player.invulnerableUntil = now + COMBAT.invulnerableMs;
+    if (this.shield) {
+      this.shield = false;
+      this.shieldBubble?.destroy();
+      this.shieldBubble = undefined;
+      this.hud.setBoosts(false, this.magnet);
+      this.effects.ring(this.player.x, this.player.y, 0x5cf2ff, 1.4);
+      this.audio.play('clang');
+      this.hud.setStatus('보호막이 공격을 막았어요!');
+      return true;
+    }
     this.hp = Math.max(0, Math.round((this.hp - (1 - this.playerStats.defense / 100)) * 100) / 100);
     this.updateScore();
     this.audio.play('hurt');
@@ -559,7 +598,7 @@ export class GameScene extends Phaser.Scene {
     this.resultTimer?.remove(false);
     this.hud.hideResult();
     this.finished = false;
-    this.hp = this.playerStats.maxHp;
+    this.hp = this.maxHp;
     this.updateScore();
     this.physics.resume();
     this.audio.resumeMusic();
@@ -621,6 +660,7 @@ export class GameScene extends Phaser.Scene {
     this.pads.update();
     const view = this.cameras.main.worldView;
     this.enemies.update(now, view, player.x, player.y, Math.abs(player.body.velocity.x));
+    if (this.magnet) this.pullCoins();
     const sections = STAGES[this.stageIndex].sections;
     if (sections) {
       let sectionIndex = 0;
@@ -665,6 +705,7 @@ export class GameScene extends Phaser.Scene {
       ropeTilt: this.ropes.find((rope) => rope.held)?.tilt ?? 0,
     });
     this.audio.setRollHum(!this.finished && player.rolling && grounded, speed);
+    this.shieldBubble?.setPosition(player.x, player.y);
     if (this.finished) return;
     if (grounded && !player.rolling && speed > 60) {
       this.stepDistance += speed * Math.min(delta, 50) / 1000;

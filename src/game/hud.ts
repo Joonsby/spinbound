@@ -24,6 +24,8 @@ export class Hud {
   private score = element('#score');
   private coins = element('#coin-count');
   private hp = element('#hp');
+  private hpChip = element('.chip-hp');
+  private coinChip = element('.chip-coin');
   private stage = element('#stage-label');
   private speedHud = element('#speed-hud');
   private result = element('#result');
@@ -71,6 +73,12 @@ export class Hud {
       heart.className = index < hp ? 'heart' : 'heart lost';
       return heart;
     }));
+  }
+
+  // Active pre-stage items show as marks on the HP and coin chips.
+  setBoosts(shield: boolean, magnet: boolean) {
+    this.hpChip.classList.toggle('shielded', shield);
+    this.coinChip.classList.toggle('magnet', magnet);
   }
 
   setSpeed(speed: number, rolling: boolean) {
