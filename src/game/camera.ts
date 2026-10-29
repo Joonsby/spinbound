@@ -22,7 +22,8 @@ export class CameraController {
   private celebrateZoom = 1;
   private arena?: Arena;
 
-  constructor(private camera: Phaser.Cameras.Scene2D.Camera, private target: Phaser.GameObjects.Components.Transform, private worldWidth: number) {}
+  // worldTop < 0 lets the view climb above the usual screen (stages that go up or down).
+  constructor(private camera: Phaser.Cameras.Scene2D.Camera, private target: Phaser.GameObjects.Components.Transform, private worldWidth: number, private worldTop = 0) {}
 
   // Visible logical size at the current zoom.
   get viewWidth() { return this.camera.width / getRenderScale() / this.zoom; }
@@ -31,7 +32,7 @@ export class CameraController {
   follow(x: number, y: number) {
     this.arena = undefined;
     this.zoom = 1;
-    this.camera.startFollow(this.target, true, 1, 1);
+    this.camera.startFollow(this.target, true, 1, this.worldTop < 0 ? 0.12 : 1);
     this.apply();
     this.snap(x, y, this.direction);
   }
@@ -74,7 +75,8 @@ export class CameraController {
     const zoom = this.zoom * this.celebrateZoom;
     const viewHeight = LOGICAL_HEIGHT / Math.min(1, zoom);
     // Bottom-anchored: zooming out reveals sky above, never empty space under the floor.
-    camera.setZoom(zoom * getRenderScale()).setBounds(0, LOGICAL_HEIGHT - viewHeight, this.worldWidth, viewHeight);
+    const top = Math.min(this.worldTop, LOGICAL_HEIGHT - viewHeight);
+    camera.setZoom(zoom * getRenderScale()).setBounds(0, top, this.worldWidth, LOGICAL_HEIGHT - top);
   }
 
   update(deltaMs: number, vx: number, facing: number) {

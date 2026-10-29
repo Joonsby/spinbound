@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ECONOMY } from '../src/game/config.ts';
-import { buyItem, clearReward, reviveOffer, takeItems } from '../src/game/economy.ts';
+import { bossBonus, buyItem, clearReward, reviveOffer, takeItems } from '../src/game/economy.ts';
 
 test('a clear pays the coins picked up plus the bonus', () => {
   assert.equal(clearReward(37, ECONOMY), 37 + ECONOMY.clearBonus);
@@ -14,6 +14,11 @@ test('no revive before a checkpoint; paying needs enough coins', () => {
   assert.equal(reviveOffer(false, 999, ECONOMY).canPay, false);
   assert.deepEqual(reviveOffer(true, ECONOMY.reviveCost - 1, ECONOMY), { offered: true, canPay: false, cost: ECONOMY.reviveCost });
   assert.equal(reviveOffer(true, ECONOMY.reviveCost, ECONOMY).canPay, true);
+});
+
+test('boss bonus grows with the boss level', () => {
+  assert.equal(bossBonus(1, ECONOMY), ECONOMY.bossBonus);
+  assert.equal(bossBonus(10, ECONOMY), ECONOMY.bossBonus + 9 * ECONOMY.bossBonusPerLevel);
 });
 
 test('buying needs enough coins and adds one item', () => {

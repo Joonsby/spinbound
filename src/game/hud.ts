@@ -1,4 +1,5 @@
 import { PHYSICS } from './config';
+import { RARITY_LABELS, type Character } from '../characters';
 
 const SPEED_STEPS = 24;
 // Above this many hit points the HUD shows numbers instead of hearts.
@@ -38,6 +39,14 @@ export class Hud {
   readonly reviveCoinButton = element<HTMLButtonElement>('#revive-coins');
   readonly reviveSkipButton = element<HTMLButtonElement>('#revive-skip');
   private reward = element('#result-reward');
+  private bossBonus = element('#result-bonus');
+  private unlock = element('#unlock');
+  private unlockRarity = element('#unlock-rarity');
+  private unlockPortrait = element<HTMLImageElement>('#unlock-portrait');
+  private unlockName = element('#unlock-name');
+  private unlockMore = element('#unlock-more');
+  readonly unlockEquipButton = element<HTMLButtonElement>('#unlock-equip');
+  readonly unlockKeepButton = element<HTMLButtonElement>('#unlock-keep');
   private revive = element('#revive');
   private reviveInfo = element('#revive-info');
   private tip = element('#tip');
@@ -116,6 +125,25 @@ export class Hud {
     if (amount !== null) this.reward.replaceChildren(stat('coin-icon', doubled ? '보상 2배 ' : '보상 ', doubled ? amount * 2 : amount, '코인'));
   }
 
+  // First boss clear: bonus coins plus one of every item.
+  setBossBonus(coins: number | null) {
+    this.bossBonus.hidden = coins === null;
+    if (coins !== null) this.bossBonus.replaceChildren(stat('coin-icon', '보스 첫 처치 ', coins, '코인'), stat('icon icon-box', '아이템 ', 3, '종'));
+  }
+
+  showUnlock(character: Character, portrait: string, remaining: number) {
+    this.unlock.dataset.rarity = character.rarity;
+    this.unlockRarity.textContent = RARITY_LABELS[character.rarity];
+    this.unlockPortrait.src = portrait;
+    this.unlockPortrait.alt = character.name;
+    this.unlockName.textContent = character.name;
+    this.unlockMore.textContent = remaining > 1 ? `새 캐릭터 ${remaining - 1}개가 더 있어요` : '';
+    this.unlock.hidden = false;
+    this.unlockEquipButton.focus({ preventScroll: true });
+  }
+
+  hideUnlock() { this.unlock.hidden = true; }
+
   showRevive(cost: number, balance: number) {
     this.reviveCoinButton.textContent = `코인 ${cost}개로 부활`;
     this.reviveCoinButton.disabled = balance < cost;
@@ -142,6 +170,7 @@ export class Hud {
   hideTip() { this.tip.hidden = true; }
 
   hideResult() {
+    this.unlock.hidden = true;
     this.result.hidden = true;
     this.revive.hidden = true;
     this.nextButton.hidden = true;

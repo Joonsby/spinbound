@@ -66,6 +66,9 @@ export const ECONOMY = {
   // Added to the coins picked up in a cleared stage.
   clearBonus: 20,
   reviveCost: 50,
+  // First clear of a boss stage, growing with the boss level; comes with one of every item.
+  bossBonus: 300,
+  bossBonusPerLevel: 100,
 };
 export type EconomyTuning = typeof ECONOMY;
 

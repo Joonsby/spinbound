@@ -1,6 +1,9 @@
 export type EnemyKind = 'patrol' | 'fly' | 'charger';
 export type PadKind = 'spring' | 'spring-left' | 'spring-right' | 'boost';
 
+// The extension lets the Node tests load this module directly.
+import { generateStage, STAGES_PER_WORLD, WORLD_NAMES } from './stage-gen.ts';
+
 export type StageData = {
   theme: 0 | 1 | 2;
   name: string;
@@ -8,7 +11,11 @@ export type StageData = {
   checkpoint: { x: number; y: number };
   checkpoints?: { x: number; y: number }[];
   goalY?: number;
-  boss?: { entry: number; left: number; right: number; x: number; y: number };
+  // Generated stages: spawn and goal anywhere, and the highest point the camera may show.
+  start?: { x: number; y: number };
+  goal?: { x: number; y: number };
+  top?: number;
+  boss?: { entry: number; left: number; right: number; x: number; y: number; level?: number; name?: string };
   oneWayPlatforms?: [number, number, number, number][];
   enemyDetails?: { kind: EnemyKind; x: number; y: number; min: number; max: number }[];
   traps?: [number, number][];
@@ -16,7 +23,7 @@ export type StageData = {
   sections?: { x: number; title: string; hint: string }[];
   // Entering a section pauses the game once to explain it (tutorial stage).
   tutorial?: boolean;
-  signs?: { x: number; y: number; text: string }[];
+  signs?: { x: number; y: number; text: string; floor?: number }[];
   // Pendulum ropes: anchor point and rope length.
   ropes?: { x: number; y: number; length: number }[];
   // Optional walls that only a fast roll breaks; never on the only route.
@@ -129,7 +136,8 @@ coinLine(STAGE_ONE, 10450, 10690, 245, 60);
 STAGE_ONE.coins.push([10900, 310], [10980, 290]);
 coinLine(STAGE_ONE, 11150, 11750, 440, 100);
 
-export const STAGES: StageData[] = [
+// World 1 is hand-made; worlds 2–10 come from the generator (stage-gen.ts), each ending in a boss.
+const WORLD_ONE: StageData[] = [
   STAGE_ONE,
   {
     theme: 1, name: '위험한 다리 · 보통', width: 2600, checkpoint: { x: 1680, y: 450 },
@@ -148,7 +156,7 @@ export const STAGES: StageData[] = [
   {
     theme: 2, name: '가속 돌파 · 기계 보스', width: 4400, checkpoint: { x: 1690, y: 450 },
     checkpoints: [{ x: 1690, y: 450 }, { x: 3020, y: 450 }],
-    boss: { entry: 3080, left: 3000, right: 4400, x: 4250, y: 432 },
+    boss: { entry: 3080, left: 3000, right: 4400, x: 4250, y: 432, level: 1, name: 'FORGE-06' },
     platforms: [
       [360, 550, 720, 140], [1170, 550, 580, 140], [1880, 550, 520, 140], [3350, 600, 2100, 240],
       [420, 382, 120, 18], [620, 300, 100, 18], [1080, 378, 130, 18], [1330, 300, 110, 18], [1840, 370, 140, 18], [2510, 380, 160, 18],
@@ -251,4 +259,10 @@ export const STAGES: StageData[] = [
     pads: [[650, 'spring'], [1530, 'boost'], [2530, 'spring'], [3470, 'boost'], [4400, 'spring'], [5290, 'boost']],
     movingPlatforms: [{ x: 850, y: 390, axis: 'x', min: 770, max: 930 }, { x: 1790, y: 400, axis: 'y', min: 270, max: 445 }, { x: 2730, y: 390, axis: 'x', min: 2650, max: 2810 }, { x: 3670, y: 400, axis: 'y', min: 270, max: 445 }, { x: 4610, y: 390, axis: 'x', min: 4530, max: 4690 }],
   },
+];
+
+export const STAGES: StageData[] = [
+  ...WORLD_ONE,
+  ...Array.from({ length: (WORLD_NAMES.length - 1) * STAGES_PER_WORLD }, (_, index) =>
+    generateStage(Math.floor(index / STAGES_PER_WORLD) + 2, index % STAGES_PER_WORLD + 1)),
 ];

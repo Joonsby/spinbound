@@ -26,6 +26,90 @@ function surfaceTops(stage: StageData, x: number) {
     .filter(([px, , width]) => x >= px - width / 2 && x <= px + width / 2)
     .map(([, y, , height]) => y - height / 2);
 }
+type Surface = { left: number; right: number; top: number; solid: boolean };
+
+// Standing surfaces: platform tops split wherever a block rises through the walking band, plus
+// one-way ledges and the swept area of sideways moving platforms.
+function surfaces(stage: StageData) {
+  const solids = stage.platforms.map(([x, y, width, height]) => ({ left: x - width / 2, right: x + width / 2, top: y - height / 2, bottom: y + height / 2 }));
+  const tops = [...solids].sort((a, b) => a.top - b.top || a.left - b.left);
+  const merged: { left: number; right: number; top: number }[] = [];
+  for (const rect of tops) {
+    const last = merged.find((other) => other.top === rect.top && rect.left <= other.right + 1 && rect.right >= other.left - 1);
+    if (last) { last.left = Math.min(last.left, rect.left); last.right = Math.max(last.right, rect.right); } else merged.push({ ...rect });
+  }
+  const list: Surface[] = [];
+  for (const surface of merged) {
+    const blockers = solids.filter((rect) => rect.top < surface.top - 2 && rect.bottom > surface.top - 40 && rect.right > surface.left && rect.left < surface.right)
+      .sort((a, b) => a.left - b.left);
+    let from = surface.left;
+    for (const block of blockers) {
+      if (block.left > from) list.push({ left: from, right: block.left, top: surface.top, solid: true });
+      from = Math.max(from, block.right);
+    }
+    if (surface.right > from) list.push({ left: from, right: surface.right, top: surface.top, solid: true });
+  }
+  for (const [x, y, width, height] of stage.oneWayPlatforms ?? []) list.push({ left: x - width / 2, right: x + width / 2, top: y - height / 2, solid: false });
+  for (const platform of stage.movingPlatforms) {
+    if (platform.axis === 'x') list.push({ left: platform.min - 55, right: platform.max + 55, top: platform.y - 10, solid: false });
+  }
+  return list;
+}
+
+const gapBetween = (a: Surface, b: Surface) => Math.max(0, Math.max(a.left, b.left) - Math.min(a.right, b.right));
+
+// Horizontal reach of a running jump that lands `rise` px higher (negative: lower), with a margin.
+function jumpReach(rise: number) {
+  const descent = PHYSICS.jumpSpeed ** 2 - 2 * PHYSICS.gravity * rise;
+  if (descent < 0) return -Infinity;
+  return PHYSICS.runSpeed * (PHYSICS.jumpSpeed + Math.sqrt(descent)) / PHYSICS.gravity - 40;
+}
+
+// Conservative moves: a jump, a walk off an edge, a spring, an elevator or a rope swing.
+function canMove(stage: StageData, a: Surface, b: Surface) {
+  const gap = gapBetween(a, b);
+  const rise = a.top - b.top;
+  const overlapping = gap === 0;
+  if (overlapping && Math.abs(rise) <= 2) return true;
+  if (rise > 0) {
+    const jump = rise <= JUMP_HEIGHT - 25 && gap <= jumpReach(rise) && (!overlapping || !b.solid || a.left < b.left - 20 || a.right > b.right + 20);
+    const spring = stage.pads.some(([x, kind, padY = 472]) => kind === 'spring' && padY + 8 === a.top && x >= a.left && x <= a.right
+      && rise <= 290 && Math.max(0, b.left - x, x - b.right) <= 220);
+    const lift = stage.movingPlatforms.some((platform) => platform.axis === 'y'
+      && Math.abs(a.top - (platform.max - 10)) <= JUMP_HEIGHT - 25 && a.top >= platform.max - 10 && Math.abs(b.top - (platform.min - 10)) <= 2
+      && platform.x + 55 >= a.left - 30 && platform.x - 55 <= a.right + 30 && platform.x + 55 >= b.left - 30 && platform.x - 55 <= b.right + 30);
+    return jump || spring || lift;
+  }
+  const drop = -rise;
+  if (overlapping) return drop > 0 && (b.left < a.left - 30 || b.right > a.right + 30);
+  const rope = (stage.ropes ?? []).some((r) => drop <= 10 && r.x > Math.min(a.right, b.right) && r.x < Math.max(a.left, b.left) && gap <= 470);
+  return gap <= jumpReach(rise) || rope;
+}
+
+function surfaceUnder(list: Surface[], x: number, y: number) {
+  return list.filter((surface) => x >= surface.left && x <= surface.right && surface.top >= y - 2).sort((a, b) => a.top - b.top)[0];
+}
+
+function reachable(stage: StageData) {
+  const list = surfaces(stage);
+  const start = stage.start ?? { x: 90, y: 440 };
+  const goal = stage.goal ?? { x: stage.width - 130, y: stage.goalY ?? 420 };
+  const from = surfaceUnder(list, start.x, start.y);
+  const to = surfaceUnder(list, goal.x, goal.y + 58);
+  assert.ok(from, 'start floats');
+  assert.ok(to && to.top === goal.y + 60, 'goal floats');
+  const seen = new Set([from]);
+  const queue = [from];
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (current === to) return true;
+    for (const next of list) {
+      if (!seen.has(next) && canMove(stage, current, next)) { seen.add(next); queue.push(next); }
+    }
+  }
+  return false;
+}
+
 // Nearest surface under the point (x, y).
 function floorBelow(stage: StageData, x: number, y: number) {
   const tops = surfaceTops(stage, x).filter((top) => top > y);
@@ -62,8 +146,9 @@ for (const [index, stage] of STAGES.entries()) {
       assert.ok(surfaceTops(stage, x).includes(padY + 8), `${kind} at ${x} floats or is buried`);
     }
     for (const point of stage.checkpoints ?? [stage.checkpoint]) {
-      assert.ok(floorRuns(stage).some(([from, to]) => point.x > from && point.x < to), `checkpoint ${point.x} over a pit`);
-      for (const enemy of [...(stage.enemyDetails ?? []), ...stage.enemies.map(([min, max]) => ({ min, max }))]) {
+      assert.ok(surfaceTops(stage, point.x).includes(point.y + 30), `checkpoint ${point.x} over a pit`);
+      // Only enemies over the checkpoint's own floor can camp it.
+      for (const enemy of [...(stage.enemyDetails ?? []).filter((enemy) => floorBelow(stage, enemy.x, enemy.y) === point.y + 30), ...stage.enemies.map(([min, max]) => ({ min, max }))]) {
         assert.ok(point.x < enemy.min - 40 || point.x > enemy.max + 40, `checkpoint ${point.x} inside a patrol`);
       }
     }
@@ -72,6 +157,18 @@ for (const [index, stage] of STAGES.entries()) {
     }
     const sections = stage.sections ?? [];
     for (let i = 1; i < sections.length; i++) assert.ok(sections[i].x > sections[i - 1].x, 'sections in order');
+  });
+
+  test(`${label}: the goal can be reached from the start`, () => {
+    assert.ok(reachable(stage), 'no route from start to goal');
+  });
+
+  test(`${label}: terrain stays inside the stage and within texture limits`, () => {
+    for (const [x, , width] of stage.platforms) {
+      assert.ok(x - width / 2 >= -1 && x + width / 2 <= stage.width + 1, `platform at ${x} leaves the stage`);
+      // World 1 has one hand-checked 2100px arena floor.
+      assert.ok(width <= (index < 10 ? 2100 : 1000), `platform at ${x} is ${width}px wide`);
+    }
   });
 
   test(`${label}: breakable walls are optional (a jumpable route passes over them)`, () => {
@@ -93,6 +190,17 @@ test('boss arena has boosters on both halves so a roll is always reachable', () 
     const boosts = stage.pads.filter(([x, kind]) => kind === 'boost' && x > left && x < right);
     assert.ok(boosts.some(([x]) => x < middle) && boosts.some(([x]) => x > middle));
   }
+});
+
+test('100 stages in 10 worlds, each world after the first ending in a boss', () => {
+  assert.equal(STAGES.length, 100);
+  for (let world = 2; world <= 10; world++) assert.ok(STAGES[world * 10 - 1].boss, `world ${world} boss`);
+  const layouts = new Set(STAGES.slice(10).map((stage) => stage.name.split(' · ')[1]));
+  for (const label of ['질주', '되돌아가기', '오르막', '내리막', '구름다리', '보스']) assert.ok(layouts.has(label), label);
+  // Some stages finish left of the start and some above it.
+  assert.ok(STAGES.some((stage) => stage.goal && stage.start && stage.goal.x < stage.start.x));
+  assert.ok(STAGES.some((stage) => stage.goal && stage.start && stage.goal.y < stage.start.y - 200));
+  assert.ok(STAGES.some((stage) => stage.goal && stage.start && stage.goal.y > stage.start.y + 200));
 });
 
 test('stage 1 is a short session: at most ~12k px with checkpoints every ≤ 3k px', () => {

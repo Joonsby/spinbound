@@ -4,6 +4,7 @@ import { bgKey, TILE } from './scenery-art';
 import { DEPTH } from './depth';
 import { quality } from './quality';
 import type { StageTheme } from './themes';
+import { LOGICAL_HEIGHT } from './display';
 
 // Layer bottoms in world y (the floor top is 480 in every stage) and camera factors.
 const LAYERS = [
@@ -73,7 +74,10 @@ export class Parallax {
     const dt = Math.min(0.05, Math.max(0, now - this.lastTime));
     this.lastTime = now;
     this.sky.setPosition(left - 2, top - 2).setDisplaySize(view.width + 4, view.height + 4);
-    this.sun.setPosition(left + view.width * this.theme.sun.x - view.x * SUN_FACTOR % view.width, top + this.theme.sun.y - view.y);
+    // How far the view has climbed above the usual screen; distant bands follow only part of it.
+    const rise = Math.min(0, view.y - (LOGICAL_HEIGHT - view.height));
+    const lift = (factor: number) => view.y - rise + rise * factor;
+    this.sun.setPosition(left + view.width * this.theme.sun.x - view.x * SUN_FACTOR % view.width, top + this.theme.sun.y - lift(SUN_FACTOR));
     const place = (layer: Layer, y: number) => {
       const offset = view.x * layer.factor + layer.drift * now;
       const start = -(((offset % TILE) + TILE) % TILE);
@@ -82,9 +86,10 @@ export class Parallax {
         image.setPosition(x, y).setVisible(x < left + view.width && x + TILE > left);
       });
     };
-    for (const layer of this.layers) place(layer, top + layer.baseline - view.y);
+    for (const layer of this.layers) place(layer, top + layer.baseline - lift(layer.factor));
     const nearBottom = LAYERS[LAYERS.length - 1].baseline - 2;
-    this.pit.setPosition(left - 2, top + nearBottom - view.y).setDisplaySize(view.width + 4, Math.max(1, view.bottom - nearBottom + 4));
+    const pitTop = top + nearBottom - lift(LAYERS[LAYERS.length - 1].factor);
+    this.pit.setPosition(left - 2, pitTop).setDisplaySize(view.width + 4, Math.max(1, top + view.height - pitTop + 4));
     if (this.foreground) place(this.foreground, top + view.height + 6);
     for (const mote of this.motes) {
       mote.u = (mote.u + mote.vu * dt + 1) % 1;

@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
-import { artScale, bake, clipped, ellipse, fillStroke, glow, linear, radial, roundRect } from './art';
+import { artScale, bake, clipped, ellipse, fillStroke, glow, linear, makeCanvas, radial, roundRect, unbake } from './art';
 import { eyesPart, PORTRAIT_BLINK_KEY, PORTRAIT_KEY, ROBOT_EXPRESSIONS, ROBOT_PARTS, ROBOT_RIG, type PartSpec, type RobotExpression } from './asset-manifest';
 import { INK, INK_SOFT, ROBOT } from './palette';
+import { DEFAULT_CHARACTER, type Character, type RobotPaint } from '../characters';
+import { getEquippedRobot } from '../progress';
 
 // TEMPORARY ART: code-painted stand-ins for the robot parts specified in docs/ASSET_MANIFEST.md.
 // They follow the reference design (white helmet, orange ear fins, black visor, cyan eyes, wheel legs)
@@ -282,28 +284,78 @@ const PAINTERS: [PartSpec, (ctx: CanvasRenderingContext2D) => void][] = [
   ...ROBOT_EXPRESSIONS.map((expression): [PartSpec, (ctx: CanvasRenderingContext2D) => void] => [eyesPart(expression), (ctx) => paintEyes(ctx, expression)]),
 ];
 
-export function createRobotArt(scene: Phaser.Scene) {
-  for (const [spec, paint] of PAINTERS) bake(scene, spec.key, spec.width, spec.height, paint);
+// Each robot is the same painting in its own colours: the painters read ROBOT, which is swapped while they run.
+const DEFAULT_PALETTE = { ...ROBOT };
+const mix = (from: string, to: string, amount: number) => {
+  const channel = (hex: string, index: number) => parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16);
+  return '#' + [0, 1, 2].map((index) => Math.round(channel(from, index) + (channel(to, index) - channel(from, index)) * amount).toString(16).padStart(2, '0')).join('');
+};
+function paletteFor(paint: RobotPaint): typeof ROBOT {
+  if (paint === DEFAULT_CHARACTER.paint) return DEFAULT_PALETTE;
+  return {
+    orange: paint.accent, orangeLight: mix(paint.accent, '#FFFFFF', 0.32), orangeDark: mix(paint.accent, '#000000', 0.22),
+    white: paint.body, whiteShade: mix(paint.body, '#6E6688', 0.2),
+    metal: paint.metal, metalLight: mix(paint.metal, '#FFFFFF', 0.35), metalDark: mix(paint.metal, '#000000', 0.4),
+    visorTop: paint.visor, visorBottom: mix(paint.visor, '#000000', 0.5),
+    eye: paint.eye, eyeCore: mix(paint.eye, '#FFFFFF', 0.8), eyeDeep: mix(paint.eye, '#000000', 0.25),
+  };
+}
+function withPalette(character: Character, paint: () => void) {
+  Object.assign(ROBOT, paletteFor(character.paint));
+  try { paint(); } finally { Object.assign(ROBOT, DEFAULT_PALETTE); }
+}
+
+const ROBOT_KEYS = [...PAINTERS.map(([spec]) => spec.key), PORTRAIT_KEY, PORTRAIT_BLINK_KEY];
+let bakedFor = '';
+
+// Part textures are shared keys, so equipping another robot repaints them.
+export function createRobotArt(scene: Phaser.Scene, character = getEquippedRobot()) {
+  if (bakedFor !== character.id) ROBOT_KEYS.forEach((key) => unbake(scene, key));
+  bakedFor = character.id;
+  withPalette(character, () => {
+    for (const [spec, paint] of PAINTERS) bake(scene, spec.key, spec.width, spec.height, paint);
+  });
   bakePortrait(scene);
 }
 
 // Idle pose composed from whatever part textures are active (painted or delivered PNG). Used by menus and UI.
 function bakePortrait(scene: Phaser.Scene) {
-  bake(scene, PORTRAIT_KEY, 64, 70, (ctx) => paintPortrait(scene, ctx, 'normal'));
-  bake(scene, PORTRAIT_BLINK_KEY, 64, 70, (ctx) => paintPortrait(scene, ctx, 'blink'));
+  const source = (spec: PartSpec) => [scene.textures.get(spec.key).getSourceImage() as CanvasImageSource, artScale(spec.key)] as const;
+  bake(scene, PORTRAIT_KEY, 64, 70, (ctx) => paintPortrait(source, ctx, 'normal'));
+  bake(scene, PORTRAIT_BLINK_KEY, 64, 70, (ctx) => paintPortrait(source, ctx, 'blink'));
 }
 
-function paintPortrait(scene: Phaser.Scene, ctx: CanvasRenderingContext2D, expression: RobotExpression) {
+const portraits = new Map<string, string>();
+// Portrait of any robot as an image URL (menus and the unlock card), painted off-screen once.
+export function robotPortraitUrl(character: Character) {
+  const cached = portraits.get(character.id);
+  if (cached) return cached;
+  const scale = 2;
+  const parts = new Map<string, HTMLCanvasElement>();
+  withPalette(character, () => {
+    for (const [spec, paint] of PAINTERS) {
+      const { canvas, ctx } = makeCanvas(spec.width, spec.height, scale);
+      paint(ctx);
+      parts.set(spec.key, canvas);
+    }
+  });
+  const { canvas, ctx } = makeCanvas(64, 70, scale);
+  paintPortrait((spec) => [parts.get(spec.key)!, scale], ctx, 'normal');
+  const url = canvas.toDataURL();
+  portraits.set(character.id, url);
+  return url;
+}
+
+function paintPortrait(source: (spec: PartSpec) => readonly [CanvasImageSource, number], ctx: CanvasRenderingContext2D, expression: RobotExpression) {
   const feet = { x: 31, y: 66 };
   const draw = (spec: PartSpec, x: number, y: number, angle = 0, partScale = 1, alpha = 1) => {
-    const source = scene.textures.get(spec.key).getSourceImage() as CanvasImageSource;
-    const pixels = artScale(spec.key);
+    const [image, pixels] = source(spec);
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(x, y);
     ctx.rotate(angle * Math.PI / 180);
     ctx.scale(partScale / pixels, partScale / pixels);
-    ctx.drawImage(source, -spec.pivotX * pixels, -spec.pivotY * pixels);
+    ctx.drawImage(image, -spec.pivotX * pixels, -spec.pivotY * pixels);
     ctx.restore();
   };
   const rig = ROBOT_RIG;

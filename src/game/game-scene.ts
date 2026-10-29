@@ -14,10 +14,12 @@ import { GameEffects } from '../effects';
 import { bindAppEnvironment } from '../app-environment';
 import { installPerformanceDiagnostics } from '../performance';
 import { installFpsWatchdog } from '../graphics/fps-watchdog';
-import { addCurrency, getEquippedRobot, getPlayerProgress, spendCurrency, unlockNextStage, type ItemId } from '../progress';
+import { addCurrency, addItems, equipCharacter, getEquippedRobot, getPlayerProgress, grantEarnedCharacters, spendCurrency, unlockNextStage, ITEM_IDS, type ItemId } from '../progress';
+import { robotPortraitUrl } from '../graphics/robot-art';
+import type { Character } from '../characters';
 import { showRewardedAd } from '../ads';
 import { BOOSTS, COMBAT, ECONOMY, GIMMICK, PHYSICS } from './config';
-import { clearReward, reviveOffer } from './economy';
+import { bossBonus, clearReward, reviveOffer } from './economy';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
 import { InputController, type Control, type InputFrame } from './input';
 import { Player } from './player';
@@ -75,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   private rewardDoubled = false;
   private adOpen = false;
   private tipOpen = false;
+  private unlocks: Character[] = [];
   private tipOpenedAt = 0;
   private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
   private targetBox = createContactBox();
@@ -125,6 +128,7 @@ export class GameScene extends Phaser.Scene {
     this.rewardDoubled = false;
     this.adOpen = false;
     this.tipOpen = false;
+    this.unlocks = [];
     this.ropes = [];
     this.boss = undefined;
   }
@@ -135,7 +139,8 @@ export class GameScene extends Phaser.Scene {
     createPropArt(this);
     createEnemyArt(this);
     const stage = STAGES[this.stageIndex];
-    const spawn = START;
+    const spawn = stage.start ?? START;
+    this.respawnPoint = spawn;
     this.hud = new Hud();
     this.hud.hideResult();
     this.audio = new GameAudio(stage.theme);
@@ -149,7 +154,8 @@ export class GameScene extends Phaser.Scene {
     this.hud.setStage(this.stageIndex, STAGES.length);
     this.hud.setStatus(`${stage.name} · ← → 이동 · 점프 · 두 번 톡톡 스핀 대시`);
     this.physics.resume();
-    this.physics.world.setBounds(0, -200, stage.width, 1100);
+    const worldTop = stage.top ?? 0;
+    this.physics.world.setBounds(0, worldTop - 200, stage.width, 1100 - worldTop);
     const { solid, oneWay } = this.buildTerrain(stage);
 
     this.player = new Player(this, spawn.x, spawn.y);
@@ -177,7 +183,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
     if (stage.boss) this.createBoss(stage);
 
-    this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width);
+    this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width, worldTop);
     this.cameraControl.follow(spawn.x, spawn.y);
     const onRenderScale = () => this.cameraControl.apply();
     this.game.events.on(RENDER_SCALE_EVENT, onRenderScale);
@@ -207,7 +213,7 @@ export class GameScene extends Phaser.Scene {
       this.effects.destroy();
       this.boss?.destroy();
       this.hud.nextButton.onclick = null;
-      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'result-double', 'revive-ad', 'revive-coins', 'revive-skip']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
+      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'result-double', 'revive-ad', 'revive-coins', 'revive-skip', 'unlock-equip', 'unlock-keep']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
       this.hud.hideResult();
       this.hud.hideTip();
       // The animation manager is shared by every scene.
@@ -233,18 +239,18 @@ export class GameScene extends Phaser.Scene {
     stage.oneWayPlatforms?.forEach((platform) => block(platform, oneWay));
     const avoid = [...stage.spikes, ...(stage.traps ?? []).map(([x]) => x), ...stage.pads.map(([x]) => x), ...(stage.walls ?? []).map((wall) => wall.x)];
     buildTerrain(this, theme, stage.platforms.map(toRect), (stage.oneWayPlatforms ?? []).map(toRect), avoid);
-    stage.signs?.forEach((sign) => this.addSign(sign.x, sign.y, sign.text));
+    stage.signs?.forEach((sign) => this.addSign(sign.x, sign.y, sign.text, sign.floor));
     return { solid, oneWay };
   }
 
-  private addSign(x: number, y: number, text: string) {
+  private addSign(x: number, y: number, text: string, floor = FLOOR_TOP) {
     const label = addLabel(this, x, y, text, { fontSize: '14px', fontStyle: 'bold', color: '#FFF4DC', stroke: '#5A3418', strokeThickness: 3 }).setOrigin(0.5).setDepth(DEPTH.prop + 0.2);
     const scale = artScale(PROP_KEYS.sign);
     const board = this.add.nineslice(x, y, PROP_KEYS.sign, undefined, (label.width + 26) * scale, (label.height + 14) * scale, SIGN_SLICE * scale, SIGN_SLICE * scale, SIGN_SLICE * scale, SIGN_SLICE * scale)
       .setScale(1 / scale).setDepth(DEPTH.prop + 0.1);
     const postTop = y + board.displayHeight / 2 - 4;
-    if (postTop < FLOOR_TOP) {
-      this.add.image(x, postTop, PROP_KEYS.post).setOrigin(0.5, 0).setDepth(DEPTH.prop).setDisplaySize(8, FLOOR_TOP - postTop + 2);
+    if (postTop < floor) {
+      this.add.image(x, postTop, PROP_KEYS.post).setOrigin(0.5, 0).setDepth(DEPTH.prop).setDisplaySize(8, floor - postTop + 2);
     }
   }
 
@@ -317,8 +323,8 @@ export class GameScene extends Phaser.Scene {
       });
     });
 
-    const goalX = stage.width - 130;
-    const goalY = stage.goalY ?? 420;
+    const goalX = stage.goal?.x ?? stage.width - 130;
+    const goalY = stage.goal?.y ?? stage.goalY ?? 420;
     const goalFloor = goalY + 60;
     const portal = this.add.image(goalX, goalFloor - 4, PROP_KEYS.portal).setOrigin(0.5, 1).setDepth(DEPTH.prop - 0.1).setScale(1 / artScale(PROP_KEYS.portal));
     this.tweens.add({ targets: portal, alpha: 0.55, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -362,8 +368,11 @@ export class GameScene extends Phaser.Scene {
 
   private bindButtons() {
     const button = (id: string) => document.querySelector<HTMLButtonElement>(`#${id}`)!;
-    button('restart').onclick = () => this.restartGame();
-    button('result-restart').onclick = () => this.restartGame(this.hp === 0);
+    // With a hundred stages both restart buttons replay the current one.
+    button('restart').onclick = () => this.restartGame(true);
+    button('result-restart').onclick = () => this.restartGame(true);
+    this.hud.unlockEquipButton.onclick = () => { if (this.unlocks[0]) equipCharacter(this.unlocks[0].id); this.nextUnlock(); };
+    this.hud.unlockKeepButton.onclick = () => this.nextUnlock();
     const returnToLobby = () => {
       this.resetInput(); this.finished = true; this.hud.hideResult();
       this.scene.start('MainMenuScene');
@@ -576,16 +585,23 @@ export class GameScene extends Phaser.Scene {
     this.audio.stopMusic();
     this.audio.play(cleared ? 'clear' : 'death');
     const allCleared = cleared && this.stageIndex === STAGES.length - 1;
+    const firstClear = cleared && getPlayerProgress().unlockedStage <= this.stageIndex + 1;
     if (cleared) unlockNextStage(this.stageIndex + 1, STAGES.length);
     this.hud.setStatus(cleared ? (allCleared ? '전체 스테이지 클리어! 축하합니다' : `Stage ${this.stageIndex + 1} 클리어!`) : 'HP가 모두 소진되었습니다');
     if (cleared) {
       this.reward = clearReward(this.coinCount - this.stageStartCoins, ECONOMY);
       addCurrency(this.reward);
+      const boss = STAGES[this.stageIndex].boss;
+      const special = boss && firstClear ? bossBonus(boss.level ?? 1, ECONOMY) : 0;
+      if (special) { addCurrency(special); addItems(ITEM_IDS); }
+      this.unlocks = grantEarnedCharacters();
       this.cameraControl.celebrate(this);
       this.effects.confetti(this.player.x, this.player.y - 20);
       this.resultTimer = this.time.delayedCall(480, () => {
-        this.hud.showResult('clear', allCleared ? 'ALL CLEAR!' : 'STAGE CLEAR!', this.totalScore(), this.coinCount, !allCleared, '처음부터 다시 시작');
+        this.hud.showResult('clear', allCleared ? 'ALL CLEAR!' : 'STAGE CLEAR!', this.totalScore(), this.coinCount, !allCleared, '다시 하기');
         this.hud.setReward(this.reward);
+        this.hud.setBossBonus(special || null);
+        this.showUnlock();
       });
       return;
     }
@@ -622,6 +638,18 @@ export class GameScene extends Phaser.Scene {
     this.tweens.resumeAll();
     this.anims.resumeAll();
     this.physics.resume();
+  }
+
+  // New robots from this clear, one card at a time over the result card.
+  private showUnlock() {
+    const character = this.unlocks[0];
+    if (character) this.hud.showUnlock(character, robotPortraitUrl(character), this.unlocks.length);
+    else this.hud.hideUnlock();
+  }
+
+  private nextUnlock() {
+    this.unlocks.shift();
+    this.showUnlock();
   }
 
   private totalScore() { return this.coinCount * COMBAT.coinScore + this.enemyScore; }
@@ -710,6 +738,11 @@ export class GameScene extends Phaser.Scene {
         this.hud.setStatus(`${sections[sectionIndex].title} · ${sections[sectionIndex].hint}`);
         if (STAGES[this.stageIndex].tutorial && !seenTips().has(sectionIndex)) this.openTip(sectionIndex);
       }
+    }
+    const right = STAGES[this.stageIndex].width - 15;
+    if (player.sprite.x > right) {
+      player.sprite.x = right;
+      player.body.setVelocityX(Math.min(0, player.body.velocity.x));
     }
     if (player.sprite.x < 15) {
       player.sprite.x = 15;

@@ -21,6 +21,7 @@
         <h1 id="result-title">STAGE CLEAR!</h1>
         <p id="result-stats"></p>
         <p id="result-reward" hidden></p>
+        <p id="result-bonus" hidden></p>
         <button id="result-double" type="button" hidden><span class="ad-chip">AD</span>광고 보고 2배 받기</button>
         <button id="result-next" type="button" hidden>다음 스테이지 →</button>
         <button id="result-restart" type="button">처음부터 다시 시작</button>
@@ -35,6 +36,17 @@
         <button id="revive-ad" type="button"><span class="ad-chip">AD</span>광고 보고 무료 부활</button>
         <button id="revive-coins" type="button">코인으로 부활</button>
         <button id="revive-skip" type="button">포기하기</button>
+      </div>
+    </section>
+    <section id="unlock" role="dialog" aria-modal="true" aria-labelledby="unlock-title" hidden>
+      <div class="result-card unlock-card">
+        <span id="unlock-rarity" class="rarity-badge"></span>
+        <img id="unlock-portrait" class="unlock-portrait" alt="" />
+        <h1 id="unlock-title">새 캐릭터 획득!</h1>
+        <p id="unlock-name"></p>
+        <small id="unlock-more"></small>
+        <button id="unlock-equip" type="button">바로 착용</button>
+        <button id="unlock-keep" type="button">그대로 진행</button>
       </div>
     </section>
     <section id="tip" role="dialog" aria-modal="true" aria-labelledby="tip-title" hidden>

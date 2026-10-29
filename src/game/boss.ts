@@ -5,7 +5,7 @@ import type { GameEffects } from '../effects';
 import { ENEMY_KEYS } from '../graphics/enemy-art';
 import { addLabel } from '../graphics/display';
 
-export type BossConfig = { entry: number; left: number; right: number; x: number; y: number };
+export type BossConfig = { entry: number; left: number; right: number; x: number; y: number; level?: number; name?: string };
 export type BossRecoil = 'stomp' | 'roll' | 'clang' | 'clang-top' | 'push';
 export type BossHooks = {
   contact: (body: Phaser.Physics.Arcade.Body) => ContactKind;
@@ -38,6 +38,10 @@ const DRONE_SPEED = 50;
 // Speed-based boss: telegraph → attack → weak point exposed → roll or stomp it.
 // One looping timer drives state changes; update() only moves things.
 export class MachineBoss {
+  // Each world's boss has 25% more HP than the last; phases split it in thirds.
+  private maxHp: number;
+  private phaseHp: [number, number];
+  private name: string;
   private hp = BOSS.maxHp;
   private state: State = 'dormant';
   private phase = 1;
@@ -86,9 +90,12 @@ export class MachineBoss {
     for (let i = 0; i < 4; i++) this.shadows.push(scene.add.image(0, this.ground - 2, 'boss-shadow').setDepth(1).setVisible(false));
     this.warning = scene.add.rectangle(0, this.ground - 13, 10, 26, 0xff8266, 0.22).setDepth(1).setVisible(false);
     this.label = addLabel(scene, config.x, config.y - 115, '', { fontSize: '18px', fontStyle: 'bold', color: '#FFF0C8', backgroundColor: '#2B2236', padding: { x: 12, y: 6 } }).setOrigin(0.5).setDepth(7);
+    this.maxHp = Math.round(BOSS.maxHp * (1 + 0.25 * ((config.level ?? 1) - 1)) / 10) * 10;
+    this.phaseHp = [Math.round(this.maxHp * 2 / 30) * 10, Math.round(this.maxHp / 30) * 10];
+    this.name = config.name ?? 'FORGE-06';
     this.hud = document.createElement('div'); this.hud.id = 'boss-hud'; this.hud.hidden = true;
     this.title = document.createElement('b');
-    this.bar = document.createElement('progress'); this.bar.max = BOSS.maxHp; this.bar.value = BOSS.maxHp; this.bar.setAttribute('aria-label', '보스 HP');
+    this.bar = document.createElement('progress'); this.bar.max = this.maxHp; this.bar.value = this.maxHp; this.bar.setAttribute('aria-label', '보스 HP');
     this.hud.append(this.title, this.bar); document.body.append(this.hud);
     this.colliders.push(scene.physics.add.overlap(player, this.targets, (_player, target) => this.touch(target as Phaser.GameObjects.Rectangle)));
     this.timer = scene.time.addEvent({ delay: 50, loop: true, callback: () => this.tick() });
@@ -162,12 +169,12 @@ export class MachineBoss {
     // Only a fight in progress owns the camera; the constructor's reset must not touch it.
     const fighting = this.state !== 'dormant';
     this.clearAttacks(); this.disable(this.actor);
-    this.hp = BOSS.maxHp; this.phase = 1; this.turn = 0; this.contactGraceUntil = 0; this.state = 'dormant';
+    this.hp = this.maxHp; this.phase = 1; this.turn = 0; this.contactGraceUntil = 0; this.state = 'dormant';
     this.actor.body.reset(this.config.x, this.config.y);
     this.actor.visual?.setPosition(this.config.x, this.config.y + VISUAL_OFFSET).clearTint().setVisible(true);
     this.core.setVisible(false);
-    this.label.setText('FORGE-06').setPosition(this.config.x, this.config.y - 115);
-    this.warning.setVisible(false); this.hud.hidden = true; this.bar.value = BOSS.maxHp;
+    this.label.setText(this.name).setPosition(this.config.x, this.config.y - 115);
+    this.warning.setVisible(false); this.hud.hidden = true; this.bar.value = this.maxHp;
     document.body.classList.remove('boss-fight');
     if (this.timer) this.timer.paused = false;
     if (fighting) this.hooks.releaseCamera();
@@ -338,13 +345,13 @@ export class MachineBoss {
     }
   }
 
-  private refreshHud() { this.bar.value = this.hp; this.title.textContent = `FORGE-06 · PHASE ${this.phase} · ${this.hp} / ${BOSS.maxHp}`; }
+  private refreshHud() { this.bar.value = this.hp; this.title.textContent = `${this.name} · PHASE ${this.phase} · ${this.hp} / ${this.maxHp}`; }
 
   private damage() {
     if (!this.active) return;
     const { x, y } = this.actor.sprite;
     this.hp = Math.max(0, this.hp - this.hooks.damagePerHit);
-    const phase = this.hp > BOSS.phaseHp[0] ? 1 : this.hp > BOSS.phaseHp[1] ? 2 : 3;
+    const phase = this.hp > this.phaseHp[0] ? 1 : this.hp > this.phaseHp[1] ? 2 : 3;
     const phaseChanged = phase !== this.phase;
     this.phase = phase;
     this.refreshHud();

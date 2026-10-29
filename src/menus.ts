@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
-import { createRobotArt } from './graphics/robot-art';
-import { buyItem, getEquippedRobot, getPlayerProgress, itemCount, savePlayerProgress, useItems, ITEM_IDS, ITEMS, ROBOTS, type ItemId } from './progress';
+import { createRobotArt, robotPortraitUrl } from './graphics/robot-art';
+import { PORTRAIT_BLINK_KEY, PORTRAIT_KEY } from './graphics/asset-manifest';
+import { CHARACTERS, RARITY_LABELS, type Character } from './characters';
+import { STAGES_PER_WORLD, WORLD_NAMES, worldOf } from './stage-gen';
+import { buyCharacter, buyItem, equipCharacter, getEquippedRobot, getPlayerProgress, itemCount, savePlayerProgress, useItems, ITEM_IDS, ITEMS, type ItemId } from './progress';
 import type { SceneData } from './game/game-scene';
 import { getSoundEnabled, setSoundEnabled } from './audio';
 import { STAGES, type StageData } from './stages';
@@ -48,10 +51,30 @@ function textureUrl(scene: Phaser.Scene, key: string) {
   return source instanceof HTMLCanvasElement ? source.toDataURL() : (source as HTMLImageElement).src;
 }
 
-function robotImage(scene: Phaser.Scene, id = getEquippedRobot().id) {
-  const robot = ROBOTS.find((item) => item.id === id) ?? ROBOTS[0];
-  const blink = scene.textures.exists(robot.blinkTexture) ? `<img class="robot-preview robot-blink" src="${textureUrl(scene, robot.blinkTexture)}" alt="">` : '';
-  return `<span class="robot-stage"><img class="robot-preview" src="${textureUrl(scene, robot.texture)}" alt="${robot.name}">${blink}</span>`;
+// The equipped robot, from the baked portrait textures (with its blink).
+function robotImage(scene: Phaser.Scene) {
+  const robot = getEquippedRobot();
+  const blink = scene.textures.exists(PORTRAIT_BLINK_KEY) ? `<img class="robot-preview robot-blink" src="${textureUrl(scene, PORTRAIT_BLINK_KEY)}" alt="">` : '';
+  return `<span class="robot-stage"><img class="robot-preview" src="${textureUrl(scene, PORTRAIT_KEY)}" alt="${robot.name}">${blink}</span>`;
+}
+
+function characterCard(character: Character, confirming: string) {
+  const player = getPlayerProgress();
+  const { id, name, rarity, unlock } = character;
+  const owned = player.ownedCharacters.includes(id);
+  const equipped = player.equippedCharacter === id;
+  let action: string;
+  if (equipped) action = '<button disabled>장착 중</button>';
+  else if (owned) action = `<button data-robot="${id}">장착</button>`;
+  else if (unlock.kind === 'coins') action = `<button data-buy-robot="${id}" aria-label="${name} 코인 ${unlock.price}개로 구매" ${player.currency < unlock.price ? 'disabled' : ''}>${confirming === id ? '한 번 더 누르면 구매' : `${coin}${unlock.price}`}</button>`;
+  else action = `<button disabled aria-label="${unlock.kind === 'boss' ? '보스' : '스테이지'} ${unlock.kind === 'clear' || unlock.kind === 'boss' ? unlock.stage : 1} 클리어로 해금">${icon('lock')}${unlock.kind === 'boss' ? 'BOSS' : 'STAGE'} ${unlock.kind === 'clear' || unlock.kind === 'boss' ? unlock.stage : 1}</button>`;
+  return `<article class="char-card${owned ? '' : ' locked'}${equipped ? ' equipped' : ''}" data-rarity="${rarity}"><span class="rarity-badge">${RARITY_LABELS[rarity]}</span><img class="char-portrait" src="${robotPortraitUrl(character)}" alt=""><h3>${name}</h3>${action}</article>`;
+}
+
+function charactersContent(confirming: string) {
+  const player = getPlayerProgress();
+  const owned = CHARACTERS.filter((character) => player.ownedCharacters.includes(character.id)).length;
+  return `<div class="collection"><div class="prepare-head"><h2>보유 ${owned} / ${CHARACTERS.length}</h2><span class="chip">${coin}코인 ${player.currency}</span></div><p class="prepare-hint">일반은 스테이지를 깨면, 영웅은 보스를 처음 처치하면 얻어요 · 희귀와 전설은 코인으로 해금해요</p><div class="char-grid">${CHARACTERS.map((character) => characterCard(character, confirming)).join('')}</div></div>`;
 }
 
 function stageCard(stage: StageData, index: number, unlocked: number) {
@@ -99,9 +122,14 @@ export class MenuScreenScene extends Phaser.Scene {
   private stageIndex = 0;
   private carry: Carry = {};
   private picked = new Set<ItemId>();
+  private world = 1;
+  private confirming = '';
   constructor() { super('MenuScreenScene'); }
-  init(data: { screen?: Screen; stageIndex?: number; carry?: Carry }) {
+  init(data: { screen?: Screen; stageIndex?: number; carry?: Carry; world?: number }) {
     this.screen = data.screen ?? 'stages';
+    const worlds = Math.ceil(STAGES.length / STAGES_PER_WORLD);
+    this.world = Phaser.Math.Clamp(data.world ?? worldOf(Math.min(getPlayerProgress().unlockedStage, STAGES.length) - 1), 1, worlds);
+    this.confirming = '';
     this.stageIndex = Math.floor(data.stageIndex ?? 0);
     this.carry = data.carry ?? {};
     this.picked = new Set();
@@ -110,15 +138,18 @@ export class MenuScreenScene extends Phaser.Scene {
   create() {
     createRobotArt(this);
     const player = getPlayerProgress();
-    const titles: Record<Screen, string> = { stages: '스테이지 선택', prepare: '출전 준비', stats: '강화 · 능력치', characters: '보유 로봇', inventory: '보관함', settings: '설정' };
+    const titles: Record<Screen, string> = { stages: '스테이지 선택', prepare: '출전 준비', stats: '강화 · 능력치', characters: '캐릭터 도감', inventory: '보관함', settings: '설정' };
     let content = '';
     if (this.screen === 'stages') {
       const unlocked = Math.min(player.unlockedStage, STAGES.length);
-      content = `<div class="stage-progress"><span>${icon('flag')}해금</span><i class="progress-track"><b></b></i><strong>${unlocked} / ${STAGES.length}</strong></div><div class="stage-grid">${STAGES.map((stage, index) => stageCard(stage, index, unlocked)).join('')}</div>`;
+      const first = (this.world - 1) * STAGES_PER_WORLD;
+      const worlds = Math.ceil(STAGES.length / STAGES_PER_WORLD);
+      const cards = STAGES.slice(first, first + STAGES_PER_WORLD).map((stage, offset) => stageCard(stage, first + offset, unlocked)).join('');
+      content = `<div class="world-bar"><button data-world-step="-1" aria-label="이전 월드" ${this.world > 1 ? '' : 'disabled'}>${icon('left')}</button><h2>WORLD ${this.world} · ${WORLD_NAMES[this.world - 1]}</h2><button data-world-step="1" aria-label="다음 월드" ${this.world < worlds ? '' : 'disabled'}>${icon('right')}</button></div><div class="stage-progress"><span>${icon('flag')}해금</span><i class="progress-track"><b></b></i><strong>${unlocked} / ${STAGES.length}</strong></div><div class="stage-grid">${cards}</div>`;
     }
     if (this.screen === 'prepare') content = prepareContent(this.stageIndex, this.picked);
     if (this.screen === 'stats') content = `<article class="menu-panel"><h2>현재 능력치</h2><dl class="stat-list"><div><dt>${icon('attack')}공격력</dt><dd>${player.stats.attack}</dd></div><div><dt>${icon('shield')}방어력</dt><dd>${player.stats.defense}%</dd></div><div><dt>${icon('heart')}HP</dt><dd>${player.stats.maxHp}</dd></div></dl><p>강화 구매는 준비 중입니다.</p></article>`;
-    if (this.screen === 'characters') content = `<div class="robot-roster">${ROBOTS.filter((robot) => player.ownedCharacters.includes(robot.id)).map((robot) => `<article class="robot-card${player.equippedCharacter === robot.id ? ' equipped' : ''}">${robotImage(this, robot.id)}<h2>${robot.name}</h2><button data-robot="${robot.id}" ${player.equippedCharacter === robot.id ? 'disabled' : ''}>${player.equippedCharacter === robot.id ? '장착 중' : '선택'}</button></article>`).join('')}</div>`;
+    if (this.screen === 'characters') content = charactersContent(this.confirming);
     if (this.screen === 'inventory') {
       const owned = ITEM_IDS.filter((id) => itemCount(id) > 0);
       content = `<article class="menu-panel"><h2>보유 아이템 ${player.items.length}개</h2>${owned.length ? `<ul class="item-grid">${owned.map((id) => `<li>${icon(ITEM_ICONS[id])}${ITEMS[id].name} ×${itemCount(id)}</li>`).join('')}</ul>` : `<div class="empty-state">${icon('box')}<p>보유한 아이템이 없습니다.</p></div>`}<p>아이템은 스테이지를 고른 뒤 출전 준비 화면에서 코인으로 살 수 있어요.</p></article>`;
@@ -141,8 +172,16 @@ export class MenuScreenScene extends Phaser.Scene {
         this.scene.start('GameScene', { ...this.carry, stageIndex: this.stageIndex, boosts } satisfies SceneData);
       } else if (button.dataset.action === 'stages') {
         this.scene.restart({ screen: 'stages' });
-      } else if (button.dataset.robot && player.ownedCharacters.includes(button.dataset.robot)) {
-        player.equippedCharacter = button.dataset.robot; savePlayerProgress(player); this.scene.restart({ screen: this.screen });
+      } else if (button.dataset.worldStep) {
+        this.scene.restart({ screen: 'stages', world: this.world + Number(button.dataset.worldStep) });
+      } else if (button.dataset.robot || button.dataset.buyRobot) {
+        // Re-render in place so the long list keeps its scroll position.
+        if (button.dataset.robot) { equipCharacter(button.dataset.robot); this.confirming = ''; }
+        else if (this.confirming === button.dataset.buyRobot) { buyCharacter(button.dataset.buyRobot!); this.confirming = ''; }
+        else this.confirming = button.dataset.buyRobot!;
+        const scroll = root.scrollTop;
+        root.querySelector('.menu-content')!.innerHTML = charactersContent(this.confirming);
+        root.scrollTop = scroll;
       } else if (button.dataset.action === 'sound') {
         setSoundEnabled(!getSoundEnabled()); button.textContent = `사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}`; button.setAttribute('aria-pressed', String(getSoundEnabled()));
       } else if (button.dataset.action === 'tips-reset') {
