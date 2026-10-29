@@ -18,6 +18,7 @@ export function installDebugClock(game: Phaser.Game) {
   if (!enabled()) return;
   let clock = performance.now();
   (window as unknown as { __spinboundClock?: object }).__spinboundClock = {
+    game,
     advance(ms: number, frameMs = 1000 / 60) {
       if (game.loop.running) game.loop.sleep();
       for (let elapsed = 0; elapsed < ms; elapsed += frameMs) {

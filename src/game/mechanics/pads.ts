@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import type { PadKind } from '../../stages';
 import type { Player } from '../player';
 import type { VisualSync } from '../visual-sync';
+import { PROP_KEYS } from '../../graphics/props-art';
+import { DEPTH } from '../../graphics/depth';
+import { addLabel } from '../../graphics/display';
 
 type Pad = { sprite: Phaser.GameObjects.Rectangle; body: Phaser.Physics.Arcade.StaticBody; visual: Phaser.GameObjects.Sprite; kind: PadKind; triggered: boolean };
 
@@ -22,12 +25,13 @@ export class PadSystem {
       scene.physics.add.existing(sprite, true);
       const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
       // Boosters read as a plate set into the floor; springs stand up from it.
-      const visual = visuals.attach(sprite, spring ? 'spring-art' : 'boost-art', 66, spring ? 16 : 10).setOrigin(0.5, 1).setY(padY + 8 + (spring ? 0 : 2));
+      const visual = visuals.attach(sprite, spring ? PROP_KEYS.spring : PROP_KEYS.boost(0), 66, spring ? 26 : 14).setOrigin(0.5, 1).setY(padY + 8 + (spring ? 0 : 3)).setDepth(DEPTH.prop);
+      if (!spring) visual.play(PROP_KEYS.boostFlow);
       if (kind === 'spring-left') visual.setAngle(-22);
       if (kind === 'spring-right') visual.setAngle(22);
       const pad: Pad = { sprite, body, visual, kind, triggered: false };
       this.pads.push(pad);
-      scene.add.text(x, padY + 28, LABELS[kind], { fontSize: '12px', color: spring ? '#ffa855' : '#42dfff' }).setOrigin(0.5);
+      addLabel(scene, x, padY + 26, LABELS[kind], { fontSize: '11px', fontStyle: 'bold', color: spring ? '#FFD2C2' : '#CFF0FF', stroke: '#2B2236', strokeThickness: 3 }).setOrigin(0.5).setDepth(DEPTH.label);
       scene.physics.add.overlap(player.sprite, sprite, () => {
         const playerBody = player.body;
         if (pad.triggered || player.dead || player.held || player.isHurt(scene.time.now) || playerBody.velocity.y < 0) return;
@@ -41,7 +45,7 @@ export class PadSystem {
 
   private compress(pad: Pad) {
     const { visual } = pad;
-    const baseY = 16 / visual.height;
+    const baseY = 26 / visual.height;
     this.scene.tweens.killTweensOf(visual);
     visual.setScale(visual.scaleX, baseY * 0.4);
     this.scene.tweens.add({ targets: visual, scaleY: baseY, duration: 260, ease: 'Back.easeOut' });

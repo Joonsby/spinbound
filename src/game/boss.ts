@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { BOSS } from './config';
 import type { ContactKind } from './contact';
 import type { GameEffects } from '../effects';
+import { ENEMY_KEYS } from '../graphics/enemy-art';
+import { addLabel } from '../graphics/display';
 
 export type BossConfig = { entry: number; left: number; right: number; x: number; y: number };
 export type BossRecoil = 'stomp' | 'roll' | 'clang' | 'clang-top' | 'push';
@@ -13,6 +15,8 @@ export type BossHooks = {
   minionDown: (x: number, y: number) => void;
   defeated: (x: number, y: number) => void;
   damagePerHit: number;
+  frameArena: (left: number, right: number, ground: number) => void;
+  releaseCamera: () => void;
 };
 type State = 'dormant' | 'intro' | 'warning' | 'attack' | 'exposed' | 'recover' | 'dead';
 type Pattern = 'charge' | 'wave' | 'drones' | 'debris' | 'combo';
@@ -27,9 +31,6 @@ const BODY = { width: 104, height: 96 };
 const VISUAL_OFFSET = -21;
 const CORE_OFFSET = 23;
 const DRONE_ALTITUDE = 100;
-// Arena framing: zoom out to show the whole arena (never below MIN_ZOOM) with the floor where it sits in normal play.
-const MIN_ZOOM = 0.5;
-const FLOOR_RATIO = 0.8;
 // Drones patrol a fixed stretch of air instead of chasing, so a dodge jump is never punished by surprise.
 const DRONE_PATROL = 90;
 const DRONE_SPEED = 50;
@@ -48,7 +49,6 @@ export class MachineBoss {
   private comboStep = 0;
   // Overlap repeats every step; after a hit or a bounce the boss ignores the player briefly.
   private contactGraceUntil = 0;
-  private viewWidth = 0;
   private ground: number;
   private actor: Unit;
   private core: Phaser.GameObjects.Image;
@@ -65,7 +65,7 @@ export class MachineBoss {
   private title: HTMLElement;
 
   constructor(private scene: Phaser.Scene, private config: BossConfig, private player: Phaser.GameObjects.Rectangle,
-    private worldWidth: number, private effects: GameEffects, private hooks: BossHooks) {
+    private effects: GameEffects, private hooks: BossHooks) {
     this.ground = config.y + BODY.height / 2;
     createBossTextures(scene);
     this.targets = scene.physics.add.group({ allowGravity: false });
@@ -82,10 +82,10 @@ export class MachineBoss {
     this.actor = make('boss', BODY.width, BODY.height, 'forge-boss');
     this.core = scene.add.image(0, 0, 'boss-core').setDepth(7).setVisible(false);
     for (let i = 0; i < 10; i++) this.hazards.push(make('hazard', 36, 26, 'boss-wave', 48, 28));
-    for (let i = 0; i < 4; i++) this.drones.push(make('drone', 28, 24, 'enemy-fly-0', 42, 32));
+    for (let i = 0; i < 4; i++) this.drones.push(make('drone', 28, 24, ENEMY_KEYS.drone, 34, 30));
     for (let i = 0; i < 4; i++) this.shadows.push(scene.add.image(0, this.ground - 2, 'boss-shadow').setDepth(1).setVisible(false));
     this.warning = scene.add.rectangle(0, this.ground - 13, 10, 26, 0xff8266, 0.22).setDepth(1).setVisible(false);
-    this.label = scene.add.text(config.x, config.y - 115, '', { fontSize: '18px', color: '#fff0c8', backgroundColor: '#473044', padding: { x: 10, y: 6 } }).setOrigin(0.5).setDepth(7);
+    this.label = addLabel(scene, config.x, config.y - 115, '', { fontSize: '18px', fontStyle: 'bold', color: '#FFF0C8', backgroundColor: '#2B2236', padding: { x: 12, y: 6 } }).setOrigin(0.5).setDepth(7);
     this.hud = document.createElement('div'); this.hud.id = 'boss-hud'; this.hud.hidden = true;
     this.title = document.createElement('b');
     this.bar = document.createElement('progress'); this.bar.max = BOSS.maxHp; this.bar.value = BOSS.maxHp; this.bar.setAttribute('aria-label', '보스 HP');
@@ -133,7 +133,7 @@ export class MachineBoss {
       this.scene.tweens.killTweensOf(unit.visual);
       unit.visual.setVisible(false).setAlpha(1).setAngle(0).clearTint();
       if (unit === this.actor) unit.visual.setScale(1);
-      else if (unit.sprite.getData('bossKind') === 'drone') unit.visual.setDisplaySize(42, 32);
+      else if (unit.sprite.getData('bossKind') === 'drone') unit.visual.setDisplaySize(34, 30);
     }
   }
 
@@ -159,8 +159,10 @@ export class MachineBoss {
   }
 
   reset() {
+    // Only a fight in progress owns the camera; the constructor's reset must not touch it.
+    const fighting = this.state !== 'dormant';
     this.clearAttacks(); this.disable(this.actor);
-    this.hp = BOSS.maxHp; this.phase = 1; this.turn = 0; this.contactGraceUntil = 0; this.viewWidth = 0; this.state = 'dormant';
+    this.hp = BOSS.maxHp; this.phase = 1; this.turn = 0; this.contactGraceUntil = 0; this.state = 'dormant';
     this.actor.body.reset(this.config.x, this.config.y);
     this.actor.visual?.setPosition(this.config.x, this.config.y + VISUAL_OFFSET).clearTint().setVisible(true);
     this.core.setVisible(false);
@@ -168,7 +170,7 @@ export class MachineBoss {
     this.warning.setVisible(false); this.hud.hidden = true; this.bar.value = BOSS.maxHp;
     document.body.classList.remove('boss-fight');
     if (this.timer) this.timer.paused = false;
-    this.scene.cameras.main.setZoom(1).setBounds(0, 0, this.worldWidth, 600).startFollow(this.player, true, 1, 1, 0, 0);
+    if (fighting) this.hooks.releaseCamera();
   }
 
   update(now: number) {
@@ -177,20 +179,10 @@ export class MachineBoss {
       this.enable(this.actor, this.config.x, this.config.y);
       this.hud.hidden = false; document.body.classList.add('boss-fight');
       this.refreshHud(); this.label.setText('보스전 시작 · 약점이 열리면 구르기·밟기!');
+      this.hooks.frameArena(this.config.left, this.config.right, this.ground);
     }
     if (!this.active) return;
     const { left, right } = this.config;
-    const camera = this.scene.cameras.main;
-    if (camera.width !== this.viewWidth) {
-      this.viewWidth = camera.width;
-      const zoom = Phaser.Math.Clamp(camera.width / (right - left), MIN_ZOOM, 1);
-      const viewHeight = camera.height / zoom;
-      const top = Math.min(0, this.ground - viewHeight * FLOOR_RATIO);
-      camera.setZoom(zoom).setBounds(left, top, right - left, Math.max(600, viewHeight));
-      // Narrow screens cannot fit the arena: follow the player inside it instead.
-      if (camera.width / zoom >= right - left - 1) { camera.stopFollow(); camera.centerOn((left + right) / 2, top + viewHeight / 2); }
-      else camera.startFollow(this.player, true, 1, 1);
-    }
     const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
     playerBody.x = Phaser.Math.Clamp(playerBody.x, left + 8, right - playerBody.width - 8);
     const body = this.actor.body;

@@ -1,6 +1,6 @@
 import { getPlayerProgress, savePlayerProgress } from './progress';
 
-export type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'clang' | 'grab' | 'boss-hit';
+export type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'clang' | 'grab' | 'boss-hit' | 'step' | 'death' | 'clear';
 type Tone = [frequency: number, duration: number, volume: number, type: OscillatorType, endFrequency: number, delay?: number];
 
 const SOUNDS: Record<SoundCue, Tone[]> = {
@@ -17,6 +17,9 @@ const SOUNDS: Record<SoundCue, Tone[]> = {
   clang: [[1200, 0.12, 0.035, 'square', 900], [1700, 0.1, 0.025, 'triangle', 1500, 0.02]],
   grab: [[340, 0.08, 0.04, 'triangle', 420]],
   'boss-hit': [[260, 0.26, 0.06, 'square', 60], [700, 0.12, 0.04, 'sine', 300, 0.03]],
+  step: [[150, 0.045, 0.016, 'triangle', 95]],
+  death: [[520, 0.18, 0.05, 'square', 300], [390, 0.2, 0.05, 'square', 200, 0.16], [260, 0.4, 0.05, 'triangle', 60, 0.34]],
+  clear: [[523, 0.14, 0.05, 'triangle', 523], [659, 0.14, 0.05, 'triangle', 659, 0.12], [784, 0.14, 0.05, 'triangle', 784, 0.24], [1047, 0.38, 0.055, 'triangle', 1047, 0.36]],
 };
 let soundEnabled = getPlayerProgress().soundEnabled;
 export function getSoundEnabled() { return soundEnabled; }
@@ -43,6 +46,7 @@ export class GameAudio {
   private disposed = false;
   private backgroundPaused = document.hidden;
   private button: HTMLButtonElement;
+  private hum?: { oscillator: OscillatorNode; gain: GainNode };
 
   constructor(private stage: number) {
     this.context = sharedContext;
@@ -62,7 +66,7 @@ export class GameAudio {
   }
 
   private refreshButton() {
-    this.button.textContent = `♪ ${soundEnabled ? 'ON' : 'OFF'}`;
+    this.button.textContent = soundEnabled ? 'ON' : 'OFF';
     this.button.setAttribute('aria-pressed', String(soundEnabled));
     this.button.setAttribute('aria-label', `사운드 ${soundEnabled ? '끄기' : '켜기'}`);
   }
@@ -125,6 +129,36 @@ export class GameAudio {
     for (const [frequency, duration, volume, type, end, delay = 0] of SOUNDS[cue]) this.tone(frequency, duration, volume, type, now + delay, end);
   }
 
+  // Continuous whir while rolling; its pitch follows the speed.
+  setRollHum(active: boolean, speed = 0) {
+    const context = this.context;
+    if (!active || this.disposed || this.backgroundPaused || !soundEnabled || !context || context.state !== 'running') { this.stopHum(); return; }
+    if (!this.hum) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'triangle';
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.014, context.currentTime + 0.08);
+      oscillator.connect(gain); gain.connect(context.destination);
+      oscillator.start();
+      this.hum = { oscillator, gain };
+    }
+    this.hum.oscillator.frequency.setTargetAtTime(70 + speed * 0.32, context.currentTime, 0.05);
+  }
+
+  private stopHum() {
+    const hum = this.hum;
+    this.hum = undefined;
+    if (!hum) return;
+    const { oscillator, gain } = hum;
+    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    try {
+      const now = this.context?.currentTime ?? 0;
+      gain.gain.setTargetAtTime(0.0001, now, 0.03);
+      oscillator.stop(now + 0.12);
+    } catch { /* Context already closed. */ }
+  }
+
   private startMusic() {
     if (this.disposed || this.backgroundPaused || !soundEnabled || !this.musicActive || this.timer !== undefined || this.context?.state !== 'running') return;
     this.nextBeat = this.context.currentTime + 0.04;
@@ -150,6 +184,7 @@ export class GameAudio {
   }
 
   private silence() {
+    this.stopHum();
     if (this.timer !== undefined) window.clearInterval(this.timer);
     this.timer = undefined;
     this.voices.forEach((voice) => { try { voice.stop(); } catch { /* Already stopped. */ } });

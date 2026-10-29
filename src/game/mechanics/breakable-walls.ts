@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { smashesWall, type ContactRules } from '../contact';
 import type { Player } from '../player';
 import type { VisualSync } from '../visual-sync';
+import { PROP_KEYS } from '../../graphics/props-art';
+import { DEPTH } from '../../graphics/depth';
 
 export type WallConfig = { x: number; y: number; width?: number; height?: number };
 
@@ -15,7 +17,7 @@ export class BreakableWalls {
       const wall = scene.add.rectangle(x, y, width, height, 0xb08a64);
       scene.physics.add.existing(wall, true);
       group.add(wall);
-      visuals.attach(wall, 'wall-art', width, height);
+      visuals.attach(wall, PROP_KEYS.wall, width, height).setDepth(DEPTH.prop);
     }
     scene.physics.add.collider(player.sprite, group, undefined, (_player, object) => {
       const wall = object as Phaser.GameObjects.Rectangle;

@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { quality, qualityLevel } from './graphics/quality';
+import { getRenderScale } from './graphics/display';
 
 // Opt in on a development server or a mobile test URL with ?perf=1.
 // No panel, sampling listener or physics wrapper is created by default.
@@ -45,7 +47,7 @@ export function installPerformanceDiagnostics(scene: Phaser.Scene) {
       `Physics 동적/정적 ${dynamicBodies}/${staticBodies}`,
       `활성 Collider/Overlap ${colliders} · 후보 쌍 검사/프레임 ${(pairTests / frames).toFixed(1)}`,
       `Graphics 표시/전체 ${visibleGraphics}/${graphics} · 표시 경로 명령 ${commands}`,
-      `텍스처 ${scene.textures.getTextureKeys().length} · 효과 풀 최대 입자 64 / 잔상 6 / 링 4`,
+      `텍스처 ${scene.textures.getTextureKeys().length} · 품질 ${qualityLevel()} · 렌더 ${getRenderScale()}x · 입자 최대 ${quality().particles} / 잔상 ${quality().ghosts}`,
     ].join('\n');
     elapsed = 0; frames = 0; pairTests = 0;
   };

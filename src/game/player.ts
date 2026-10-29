@@ -3,7 +3,6 @@ import { COMBAT, PHYSICS } from './config';
 import { applyBoost, createJumpState, createRunState, cutJump, nextRolling, noteGrounded, pressJump, resetRun, stepRun, tryJump } from './movement';
 import { createContactBox } from './contact';
 import type { InputFrame } from './input';
-import { PLAYER_BODY, type PlayerPose } from './player-animation';
 
 const GROUND_LOCK_MS = 120;
 const RECOIL_LOCK_MS = 160;
@@ -11,6 +10,9 @@ const PLATFORM_CONTACT_MS = 50;
 // Rope releases and diagonal springs may exceed the booster cap for a moment.
 const MAX_SPEED_X = 480;
 
+// Physics body; the drawn robot (RobotRig) is sized independently.
+export const PLAYER_BODY = { width: 30, height: 42 };
+export type PlayerPose = 'idle' | 'run' | 'jump' | 'fall' | 'roll' | 'hurt' | 'dead';
 export type PlayerFrame = { jumped: boolean; landed: boolean; landingSpeed: number };
 
 // Player physics state. Rendering lives in PlayerAnimator; HP and score live in the scene.
