@@ -40,6 +40,11 @@ export class Hud {
   private reward = element('#result-reward');
   private revive = element('#revive');
   private reviveInfo = element('#revive-info');
+  private tip = element('#tip');
+  private tipStep = element('#tip-step');
+  private tipTitle = element('#tip-title');
+  private tipText = element('#tip-text');
+  readonly tipButton = element<HTMLButtonElement>('#tip-continue');
   private shownSpeed = -1;
   private shownRolling: boolean | undefined;
   private shownStatus = '';
@@ -120,6 +125,21 @@ export class Hud {
     this.revive.hidden = false;
     this.reviveAdButton.focus({ preventScroll: true });
   }
+
+  // Tutorial card over the paused game; the hint's " · " parts become separate lines.
+  showTip(step: number, total: number, title: string, hint: string) {
+    this.tipStep.textContent = `TIP ${step} / ${total}`;
+    this.tipTitle.textContent = title;
+    this.tipText.replaceChildren(...hint.split(' · ').map((line) => {
+      const item = document.createElement('li');
+      item.textContent = line;
+      return item;
+    }));
+    this.tip.hidden = false;
+    this.tipButton.focus({ preventScroll: true });
+  }
+
+  hideTip() { this.tip.hidden = true; }
 
   hideResult() {
     this.result.hidden = true;

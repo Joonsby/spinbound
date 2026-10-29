@@ -37,6 +37,15 @@
         <button id="revive-skip" type="button">포기하기</button>
       </div>
     </section>
+    <section id="tip" role="dialog" aria-modal="true" aria-labelledby="tip-title" hidden>
+      <div class="tip-card">
+        <span id="tip-step" class="tip-step"></span>
+        <h1 id="tip-title"></h1>
+        <ul id="tip-text"></ul>
+        <button id="tip-continue" type="button">계속하기</button>
+        <small>화면 아무 곳이나 눌러도 이어져요</small>
+      </div>
+    </section>
     <!-- Bottom banner ad slot (mock until Apps in Toss ads are connected). -->
     <aside id="ad-banner" aria-label="광고"><div id="ad-banner-slot">광고 · 테스트 배너 320×50</div></aside>
     <script type="module" src="/src/main.ts"></script>

@@ -34,6 +34,7 @@ import { SwingRope } from './mechanics/swing-rope';
 import { BreakableWalls } from './mechanics/breakable-walls';
 import { MachineBoss, type BossRecoil } from './boss';
 import { installDebugHooks } from './debug';
+import { markTipSeen, seenTips } from './tutorial';
 
 const START = { x: 90, y: 440 };
 const CRYSTAL_IDLE_TINT = 0x8fa3b8;
@@ -73,6 +74,8 @@ export class GameScene extends Phaser.Scene {
   private reward = 0;
   private rewardDoubled = false;
   private adOpen = false;
+  private tipOpen = false;
+  private tipOpenedAt = 0;
   private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
   private targetBox = createContactBox();
   private hud!: Hud;
@@ -121,6 +124,7 @@ export class GameScene extends Phaser.Scene {
     this.reward = 0;
     this.rewardDoubled = false;
     this.adOpen = false;
+    this.tipOpen = false;
     this.ropes = [];
     this.boss = undefined;
   }
@@ -178,6 +182,11 @@ export class GameScene extends Phaser.Scene {
     const onRenderScale = () => this.cameraControl.apply();
     this.game.events.on(RENDER_SCALE_EVENT, onRenderScale);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render, this);
+    const tip = document.querySelector<HTMLElement>('#tip')!;
+    const onTipClick = () => this.closeTip();
+    const onTipKey = (event: KeyboardEvent) => { if (!event.repeat && ['Space', 'Enter', 'Escape'].includes(event.code)) this.closeTip(); };
+    tip.addEventListener('click', onTipClick);
+    document.addEventListener('keydown', onTipKey);
     const unbindEnvironment = bindAppEnvironment(this, () => this.resetInput(), () => this.audio.pauseForBackground(), () => this.audio.resumeFromBackground());
     installPerformanceDiagnostics(this);
     installFpsWatchdog(this);
@@ -200,6 +209,11 @@ export class GameScene extends Phaser.Scene {
       this.hud.nextButton.onclick = null;
       for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'result-double', 'revive-ad', 'revive-coins', 'revive-skip']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
       this.hud.hideResult();
+      this.hud.hideTip();
+      // The animation manager is shared by every scene.
+      if (this.tipOpen) this.anims.resumeAll();
+      tip.removeEventListener('click', onTipClick);
+      document.removeEventListener('keydown', onTipKey);
     });
     this.bindButtons();
   }
@@ -584,6 +598,32 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // Freezes the stage (physics, tweens, animations) while a tutorial tip is read.
+  private openTip(index: number) {
+    const sections = STAGES[this.stageIndex].sections!;
+    const { title, hint } = sections[index];
+    markTipSeen(index);
+    this.tipOpen = true;
+    this.tipOpenedAt = performance.now();
+    this.resetInput();
+    this.physics.pause();
+    this.tweens.pauseAll();
+    this.anims.pauseAll();
+    this.audio.setRollHum(false);
+    this.hud.showTip(index + 1, sections.length, title.split(' · ').pop()!, hint);
+  }
+
+  private closeTip() {
+    // A tap already under way when the tip opened must not dismiss it at once.
+    if (!this.tipOpen || performance.now() - this.tipOpenedAt < 350) return;
+    this.tipOpen = false;
+    this.hud.hideTip();
+    this.resetInput();
+    this.tweens.resumeAll();
+    this.anims.resumeAll();
+    this.physics.resume();
+  }
+
   private totalScore() { return this.coinCount * COMBAT.coinScore + this.enemyScore; }
 
   private showGameOver() {
@@ -627,7 +667,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    if (this.finished) return;
+    if (this.finished || this.tipOpen) return;
     const now = this.time.now;
     if (this.hitStopUntil) {
       if (now < this.hitStopUntil) return;
@@ -668,6 +708,7 @@ export class GameScene extends Phaser.Scene {
       if (sectionIndex !== this.currentSection) {
         this.currentSection = sectionIndex;
         this.hud.setStatus(`${sections[sectionIndex].title} · ${sections[sectionIndex].hint}`);
+        if (STAGES[this.stageIndex].tutorial && !seenTips().has(sectionIndex)) this.openTip(sectionIndex);
       }
     }
     if (player.sprite.x < 15) {
@@ -682,6 +723,7 @@ export class GameScene extends Phaser.Scene {
 
   // POST_UPDATE: physics has settled, so sprites, effects and HUD read final positions.
   private render(_time: number, delta: number) {
+    if (this.tipOpen) return;
     const now = this.time.now;
     const { player } = this;
     this.effects.update(delta);

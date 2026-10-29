@@ -14,6 +14,8 @@ export type StageData = {
   traps?: [number, number][];
   rewards?: { x: number; y: number; score: number }[];
   sections?: { x: number; title: string; hint: string }[];
+  // Entering a section pauses the game once to explain it (tutorial stage).
+  tutorial?: boolean;
   signs?: { x: number; y: number; text: string }[];
   // Pendulum ropes: anchor point and rope length.
   ropes?: { x: number; y: number; length: number }[];
@@ -52,7 +54,7 @@ function coinArc(stage: StageData, centerX: number, y: number, width: number, he
 // move/jump → spring → booster roll → roll attack → stomp → moving platform → rope → breakable wall → all together.
 // A checkpoint sits before every pit so a fall never replays more than one section.
 const STAGE_ONE: StageData = {
-  theme: 0, name: '새벽 초원의 대모험', width: 12000,
+  theme: 0, name: '새벽 초원의 대모험', width: 12000, tutorial: true,
   checkpoint: { x: 4700, y: 450 },
   checkpoints: [{ x: 4700, y: 450 }, { x: 5950, y: 450 }, { x: 7050, y: 450 }, { x: 10000, y: 450 }],
   platforms: [

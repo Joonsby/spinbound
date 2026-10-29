@@ -10,6 +10,7 @@ import { configureQuality, qualityLevel, type QualitySetting } from './graphics/
 import { unbakeAll } from './graphics/art';
 import { APPLY_DISPLAY_EVENT } from './graphics/display';
 import { cloudSaveStatusText, syncCloudSaveNow } from './cloud-save';
+import { resetTips } from './game/tutorial';
 
 type Screen = 'stages' | 'prepare' | 'stats' | 'characters' | 'inventory' | 'settings';
 // HP and score carried into the next stage of a run.
@@ -122,7 +123,7 @@ export class MenuScreenScene extends Phaser.Scene {
       const owned = ITEM_IDS.filter((id) => itemCount(id) > 0);
       content = `<article class="menu-panel"><h2>보유 아이템 ${player.items.length}개</h2>${owned.length ? `<ul class="item-grid">${owned.map((id) => `<li>${icon(ITEM_ICONS[id])}${ITEMS[id].name} ×${itemCount(id)}</li>`).join('')}</ul>` : `<div class="empty-state">${icon('box')}<p>보유한 아이템이 없습니다.</p></div>`}<p>아이템은 스테이지를 고른 뒤 출전 준비 화면에서 코인으로 살 수 있어요.</p></article>`;
     }
-    if (this.screen === 'settings') content = `<article class="menu-panel settings-panel"><section class="setting"><h2>${icon('sound-on')}사운드</h2><button data-action="sound" aria-pressed="${getSoundEnabled()}">사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}</button></section><section class="setting"><h2>${icon('settings')}그래픽 품질</h2><div class="segmented" role="group" aria-label="그래픽 품질">${QUALITY_OPTIONS.map((value) => `<button data-quality="${value}" aria-pressed="${player.graphicsQuality === value}">${QUALITY_LABELS[value]}</button>`).join('')}</div><p>현재 적용 ${QUALITY_LABELS[qualityLevel()]} · 낮음은 배경 레이어와 효과 수를 줄입니다</p></section><section class="setting"><h2>${icon('box')}클라우드 저장</h2><p data-cloud-status>${cloudSaveStatusText()}</p><button data-action="cloud-sync">지금 동기화</button></section></article>`;
+    if (this.screen === 'settings') content = `<article class="menu-panel settings-panel"><section class="setting"><h2>${icon('sound-on')}사운드</h2><button data-action="sound" aria-pressed="${getSoundEnabled()}">사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}</button></section><section class="setting"><h2>${icon('settings')}그래픽 품질</h2><div class="segmented" role="group" aria-label="그래픽 품질">${QUALITY_OPTIONS.map((value) => `<button data-quality="${value}" aria-pressed="${player.graphicsQuality === value}">${QUALITY_LABELS[value]}</button>`).join('')}</div><p>현재 적용 ${QUALITY_LABELS[qualityLevel()]} · 낮음은 배경 레이어와 효과 수를 줄입니다</p></section><section class="setting"><h2>${icon('box')}클라우드 저장</h2><p data-cloud-status>${cloudSaveStatusText()}</p><button data-action="cloud-sync">지금 동기화</button></section><section class="setting"><h2>${icon('flag')}튜토리얼</h2><p>스테이지 1의 기능 설명을 다시 멈춰서 보여줘요</p><button data-action="tips-reset">튜토리얼 다시 보기</button></section></article>`;
     const root = mount(this, titles[this.screen], content, (button) => {
       if (button.dataset.stage !== undefined) {
         const stageIndex = Number(button.dataset.stage);
@@ -144,6 +145,10 @@ export class MenuScreenScene extends Phaser.Scene {
         player.equippedCharacter = button.dataset.robot; savePlayerProgress(player); this.scene.restart({ screen: this.screen });
       } else if (button.dataset.action === 'sound') {
         setSoundEnabled(!getSoundEnabled()); button.textContent = `사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}`; button.setAttribute('aria-pressed', String(getSoundEnabled()));
+      } else if (button.dataset.action === 'tips-reset') {
+        resetTips();
+        button.disabled = true;
+        button.textContent = '다음 스테이지 1부터 다시 보여줘요';
       } else if (button.dataset.action === 'cloud-sync') {
         const text = root.querySelector('[data-cloud-status]')!;
         button.disabled = true;
