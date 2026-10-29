@@ -14,8 +14,10 @@ import { GameEffects } from '../effects';
 import { bindAppEnvironment } from '../app-environment';
 import { installPerformanceDiagnostics } from '../performance';
 import { installFpsWatchdog } from '../graphics/fps-watchdog';
-import { getEquippedRobot, getPlayerProgress, unlockNextStage } from '../progress';
-import { COMBAT, GIMMICK, PHYSICS } from './config';
+import { addCurrency, getEquippedRobot, getPlayerProgress, spendCurrency, unlockNextStage } from '../progress';
+import { showRewardedAd } from '../ads';
+import { COMBAT, ECONOMY, GIMMICK, PHYSICS } from './config';
+import { clearReward, reviveOffer } from './economy';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
 import { InputController, type Control, type InputFrame } from './input';
 import { Player } from './player';
@@ -63,6 +65,9 @@ export class GameScene extends Phaser.Scene {
   private currentSection = -1;
   private hitStopUntil = 0;
   private resultTimer?: Phaser.Time.TimerEvent;
+  private reward = 0;
+  private rewardDoubled = false;
+  private adOpen = false;
   private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
   private targetBox = createContactBox();
   private hud!: Hud;
@@ -101,6 +106,9 @@ export class GameScene extends Phaser.Scene {
     this.currentSection = -1;
     this.hitStopUntil = 0;
     this.resultTimer = undefined;
+    this.reward = 0;
+    this.rewardDoubled = false;
+    this.adOpen = false;
     this.ropes = [];
     this.boss = undefined;
   }
@@ -176,7 +184,7 @@ export class GameScene extends Phaser.Scene {
       this.effects.destroy();
       this.boss?.destroy();
       this.hud.nextButton.onclick = null;
-      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
+      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'result-double', 'revive-ad', 'revive-coins', 'revive-skip']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
       this.hud.hideResult();
     });
     this.bindButtons();
@@ -343,6 +351,10 @@ export class GameScene extends Phaser.Scene {
     };
     button('lobby').onclick = returnToLobby;
     button('result-lobby').onclick = returnToLobby;
+    this.hud.doubleButton.onclick = () => { void this.doubleReward(); };
+    this.hud.reviveAdButton.onclick = () => { void this.reviveWithAd(); };
+    this.hud.reviveCoinButton.onclick = () => { if (!this.adOpen && spendCurrency(ECONOMY.reviveCost)) this.revive(); };
+    this.hud.reviveSkipButton.onclick = () => { if (!this.adOpen) this.showGameOver(); };
     this.hud.nextButton.onclick = () => {
       if (!this.finished || this.hp <= 0 || this.stageIndex >= STAGES.length - 1) return;
       this.resetInput();
@@ -513,17 +525,66 @@ export class GameScene extends Phaser.Scene {
     const allCleared = cleared && this.stageIndex === STAGES.length - 1;
     if (cleared) unlockNextStage(this.stageIndex + 1, STAGES.length);
     this.hud.setStatus(cleared ? (allCleared ? '전체 스테이지 클리어! 축하합니다' : `Stage ${this.stageIndex + 1} 클리어!`) : 'HP가 모두 소진되었습니다');
-    const showResult = () => this.hud.showResult(
-      cleared ? 'clear' : 'over',
-      cleared ? (allCleared ? 'ALL CLEAR!' : 'STAGE CLEAR!') : 'GAME OVER',
-      this.coinCount * COMBAT.coinScore + this.enemyScore,
-      this.coinCount,
-      cleared && !allCleared,
-      cleared ? '처음부터 다시 시작' :`Stage ${this.stageIndex + 1}에서 부활 (HP ${this.playerStats.maxHp})`,
-    );
-    if (cleared) { this.cameraControl.celebrate(this); this.effects.confetti(this.player.x, this.player.y - 20); }
-    else this.effects.burst(this.player.x, this.player.y, 0xd7dde0, 12, 120);
-    this.resultTimer = this.time.delayedCall(cleared ? 480 : 650, showResult);
+    if (cleared) {
+      this.reward = clearReward(this.coinCount - this.stageStartCoins, ECONOMY);
+      addCurrency(this.reward);
+      this.cameraControl.celebrate(this);
+      this.effects.confetti(this.player.x, this.player.y - 20);
+      this.resultTimer = this.time.delayedCall(480, () => {
+        this.hud.showResult('clear', allCleared ? 'ALL CLEAR!' : 'STAGE CLEAR!', this.totalScore(), this.coinCount, !allCleared, '처음부터 다시 시작');
+        this.hud.setReward(this.reward);
+      });
+      return;
+    }
+    this.effects.burst(this.player.x, this.player.y, 0xd7dde0, 12, 120);
+    // A revive restarts from the last checkpoint, so without one there is nothing to offer.
+    const offer = reviveOffer(this.checkpointActive, getPlayerProgress().currency, ECONOMY);
+    this.resultTimer = this.time.delayedCall(650, () => {
+      if (offer.offered) this.hud.showRevive(offer.cost, getPlayerProgress().currency);
+      else this.showGameOver();
+    });
+  }
+
+  private totalScore() { return this.coinCount * COMBAT.coinScore + this.enemyScore; }
+
+  private showGameOver() {
+    this.hud.hideResult();
+    this.hud.showResult('over', 'GAME OVER', this.totalScore(), this.coinCount, false, `Stage ${this.stageIndex + 1} 다시 시작`);
+    this.hud.setReward(null);
+  }
+
+  // Back at the last checkpoint with full HP; score and coins of this run are kept.
+  private revive() {
+    if (!this.finished || this.hp > 0) return;
+    this.resultTimer?.remove(false);
+    this.hud.hideResult();
+    this.finished = false;
+    this.hp = this.playerStats.maxHp;
+    this.updateScore();
+    this.physics.resume();
+    this.audio.resumeMusic();
+    this.respawn();
+  }
+
+  private async reviveWithAd() {
+    if (this.adOpen) return;
+    this.adOpen = true;
+    const watched = await showRewardedAd('무료 부활');
+    this.adOpen = false;
+    if (watched) this.revive();
+  }
+
+  private async doubleReward() {
+    if (this.adOpen || this.rewardDoubled || !this.finished || this.hp <= 0) return;
+    this.adOpen = true;
+    this.hud.doubleButton.disabled = true;
+    const watched = await showRewardedAd('클리어 보상 2배');
+    this.adOpen = false;
+    this.hud.doubleButton.disabled = false;
+    if (!watched || this.rewardDoubled || !this.finished) return;
+    this.rewardDoubled = true;
+    addCurrency(this.reward);
+    this.hud.setReward(this.reward, true);
   }
 
   update(_time: number, delta: number) {

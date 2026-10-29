@@ -191,6 +191,8 @@ export class GameAudio {
   }
 
   stopMusic() { this.musicActive = false; this.silence(); }
+  // After a revive the stage music plays again.
+  resumeMusic() { this.musicActive = true; this.startMusic(); }
 
   destroy() {
     this.disposed = true;

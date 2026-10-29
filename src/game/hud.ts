@@ -31,6 +31,13 @@ export class Hud {
   private resultStats = element('#result-stats');
   readonly nextButton = element<HTMLButtonElement>('#result-next');
   readonly restartButton = element<HTMLButtonElement>('#result-restart');
+  readonly doubleButton = element<HTMLButtonElement>('#result-double');
+  readonly reviveAdButton = element<HTMLButtonElement>('#revive-ad');
+  readonly reviveCoinButton = element<HTMLButtonElement>('#revive-coins');
+  readonly reviveSkipButton = element<HTMLButtonElement>('#revive-skip');
+  private reward = element('#result-reward');
+  private revive = element('#revive');
+  private reviveInfo = element('#revive-info');
   private shownSpeed = -1;
   private shownRolling: boolean | undefined;
   private shownStatus = '';
@@ -88,8 +95,27 @@ export class Hud {
     (showNext ? this.nextButton : this.restartButton).focus({ preventScroll: true });
   }
 
+  // Clear reward under the stats; null hides it (game over). The ad button shows until the reward is doubled.
+  setReward(amount: number | null, doubled = false) {
+    this.reward.hidden = amount === null;
+    this.doubleButton.hidden = amount === null || doubled;
+    this.doubleButton.disabled = false;
+    if (amount !== null) this.reward.replaceChildren(stat('coin-icon', doubled ? '보상 2배 ' : '보상 ', doubled ? amount * 2 : amount, '코인'));
+  }
+
+  showRevive(cost: number, balance: number) {
+    this.reviveCoinButton.textContent = `코인 ${cost}개로 부활`;
+    this.reviveCoinButton.disabled = balance < cost;
+    const note = document.createElement('span');
+    note.textContent = '마지막 체크포인트에서 HP를 가득 채워 이어 해요';
+    this.reviveInfo.replaceChildren(note, stat('coin-icon', '보유 ', balance, '개'));
+    this.revive.hidden = false;
+    this.reviveAdButton.focus({ preventScroll: true });
+  }
+
   hideResult() {
     this.result.hidden = true;
+    this.revive.hidden = true;
     this.nextButton.hidden = true;
   }
 }

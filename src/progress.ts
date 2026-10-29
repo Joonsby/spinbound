@@ -54,6 +54,20 @@ export function getPlayerProgress(): PlayerProgress {
   }
   return progress!;
 }
+export function addCurrency(amount: number) {
+  const data = getPlayerProgress();
+  data.currency += amount;
+  savePlayerProgress(data);
+  return getPlayerProgress().currency;
+}
+// Returns false (and spends nothing) when the balance is too low.
+export function spendCurrency(amount: number) {
+  const data = getPlayerProgress();
+  if (data.currency < amount) return false;
+  data.currency -= amount;
+  savePlayerProgress(data);
+  return true;
+}
 export function getEquippedRobot() { return ROBOTS.find((robot) => robot.id === getPlayerProgress().equippedCharacter) ?? ROBOTS[0]; }
 export function unlockNextStage(completed: number, total: number) {
   const data = getPlayerProgress();

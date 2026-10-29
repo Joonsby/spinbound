@@ -61,6 +61,14 @@ export const COMBAT = {
 };
 export type CombatTuning = typeof COMBAT;
 
+// Coins kept between plays (the lobby balance).
+export const ECONOMY = {
+  // Added to the coins picked up in a cleared stage.
+  clearBonus: 20,
+  reviveCost: 50,
+};
+export type EconomyTuning = typeof ECONOMY;
+
 export const GIMMICK = {
   springSpeed: 820,
   springDiagonalX: 420,

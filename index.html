@@ -20,11 +20,25 @@
         <i class="result-badge" aria-hidden="true"></i>
         <h1 id="result-title">STAGE CLEAR!</h1>
         <p id="result-stats"></p>
+        <p id="result-reward" hidden></p>
+        <button id="result-double" type="button" hidden><span class="ad-chip">AD</span>광고 보고 2배 받기</button>
         <button id="result-next" type="button" hidden>다음 스테이지 →</button>
         <button id="result-restart" type="button">처음부터 다시 시작</button>
         <button id="result-lobby" type="button">메인 로비</button>
       </div>
     </section>
+    <section id="revive" role="dialog" aria-modal="true" aria-labelledby="revive-title" hidden>
+      <div class="result-card revive-card">
+        <i class="result-badge" aria-hidden="true"></i>
+        <h1 id="revive-title">부활할까요?</h1>
+        <p id="revive-info"></p>
+        <button id="revive-ad" type="button"><span class="ad-chip">AD</span>광고 보고 무료 부활</button>
+        <button id="revive-coins" type="button">코인으로 부활</button>
+        <button id="revive-skip" type="button">포기하기</button>
+      </div>
+    </section>
+    <!-- Bottom banner ad slot (mock until Apps in Toss ads are connected). -->
+    <aside id="ad-banner" aria-label="광고"><div id="ad-banner-slot">광고 · 테스트 배너 320×50</div></aside>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
