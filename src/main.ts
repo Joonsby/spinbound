@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { closeAudio } from './audio';
+import { startCloudSave } from './cloud-save';
 import { BootScene } from './boot-scene';
 import { MainMenuScene, MenuScreenScene } from './menus';
 import { GameScene } from './game/game-scene';
@@ -38,6 +39,12 @@ const game = new Phaser.Game({
 });
 game.events.once(Phaser.Core.Events.DESTROY, closeAudio);
 installDebugClock(game);
+// Inside Toss, progress also syncs per player; open menus redraw when the cloud copy wins.
+startCloudSave(() => {
+  for (const scene of game.scene.getScenes(true)) {
+    if (scene instanceof MainMenuScene || scene instanceof MenuScreenScene) scene.scene.restart(scene.sys.settings.data);
+  }
+});
 
 function applyGameSize() {
   const previous = getRenderScale();

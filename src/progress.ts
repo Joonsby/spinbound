@@ -37,9 +37,14 @@ function recover(value: unknown): PlayerProgress {
     graphicsQuality: QUALITY_SETTINGS.includes(data.graphicsQuality as QualitySetting) ? data.graphicsQuality as QualitySetting : 'auto',
   };
 }
+// Validates progress from outside the game (the cloud copy); bad fields fall back to defaults.
+export const recoverPlayerProgress = (value: unknown) => recover(value);
+let savedListener: ((value: PlayerProgress) => void) | undefined;
+export function onPlayerProgressSaved(listener: (value: PlayerProgress) => void) { savedListener = listener; }
 export function savePlayerProgress(value: PlayerProgress) {
   progress = recover(value);
   try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch { /* Storage may be unavailable; keep in-memory progress. */ }
+  savedListener?.(progress);
 }
 export function getPlayerProgress(): PlayerProgress {
   if (!progress) {
