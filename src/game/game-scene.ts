@@ -467,7 +467,7 @@ export class GameScene extends Phaser.Scene {
       this.coinCount * COMBAT.coinScore + this.enemyScore,
       this.coinCount,
       cleared && !allCleared,
-      cleared ? 'Stage 1부터 다시 시작' : `Stage ${this.stageIndex + 1}에서 부활 (HP ${this.playerStats.maxHp})`,
+      cleared ? '처음부터 다시 시작' :`Stage ${this.stageIndex + 1}에서 부활 (HP ${this.playerStats.maxHp})`,
     );
     if (cleared) { this.cameraControl.celebrate(this); this.effects.confetti(this.player.x, this.player.y - 20); }
     else this.effects.burst(this.player.x, this.player.y, 0xd7dde0, 12, 120);
