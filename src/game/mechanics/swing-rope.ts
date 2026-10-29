@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { GIMMICK, PHYSICS } from '../config';
 import type { Player } from '../player';
+import { PROP_KEYS } from '../../graphics/props-art';
+import { artScale } from '../../graphics/art';
+import { DEPTH } from '../../graphics/depth';
 
 export type RopeConfig = { x: number; y: number; length: number };
 
@@ -13,6 +16,7 @@ const IDLE_SWAY = 0.12;
 export class SwingRope {
   held = false;
   private graphics: Phaser.GameObjects.Graphics;
+  private hook: Phaser.GameObjects.Image;
   private angle = 0;
   private angularVelocity = 0;
   private grip = 0;
@@ -20,8 +24,9 @@ export class SwingRope {
   private regrabAt = 0;
 
   constructor(scene: Phaser.Scene, private config: RopeConfig) {
-    this.graphics = scene.add.graphics().setDepth(3);
-    scene.add.image(config.x, config.y, 'rope-anchor').setDepth(3);
+    this.graphics = scene.add.graphics().setDepth(DEPTH.prop);
+    scene.add.image(config.x, config.y, PROP_KEYS.ropeAnchor).setOrigin(0.5, 0.35).setDepth(DEPTH.prop + 0.2).setScale(1 / artScale(PROP_KEYS.ropeAnchor));
+    this.hook = scene.add.image(config.x, config.y + config.length, PROP_KEYS.ropeHook).setOrigin(0.5, 2.5 / 22).setDepth(DEPTH.player + 0.2).setScale(1 / artScale(PROP_KEYS.ropeHook));
   }
 
   get tilt() { return this.held ? -Phaser.Math.RadToDeg(this.angle) : 0; }
@@ -107,20 +112,29 @@ export class SwingRope {
     const { x, y, length } = this.config;
     const visible = x + length >= view.left && x - length <= view.right;
     this.graphics.setVisible(visible);
+    this.hook.setVisible(visible);
     if (!visible) return;
     const g = this.graphics;
-    const tipX = x + Math.sin(this.angle) * length;
-    const tipY = y + Math.cos(this.angle) * length;
+    const sin = Math.sin(this.angle);
+    const cos = Math.cos(this.angle);
+    const tipX = x + sin * length;
+    const tipY = y + cos * length;
     g.clear();
-    g.lineStyle(5, 0x6b4a2f);
+    g.lineStyle(6, 0x2b2236);
     g.lineBetween(x, y, tipX, tipY);
-    g.lineStyle(2, 0xe2bd88);
+    g.lineStyle(4, 0x9a6a3e);
     g.lineBetween(x, y, tipX, tipY);
-    g.fillStyle(0xe2bd88);
-    g.fillCircle(tipX, tipY, 6);
+    // Twisted strands: short light dashes along the rope.
+    g.lineStyle(1.6, 0xe2bd88);
+    for (let d = 8; d < length - 6; d += 9) {
+      const px = x + sin * d;
+      const py = y + cos * d;
+      g.lineBetween(px - cos * 1.6 - sin * 2, py + sin * 1.6 - cos * 2, px + cos * 1.6 + sin * 2, py - sin * 1.6 + cos * 2);
+    }
+    this.hook.setPosition(tipX, tipY).setRotation(-this.angle);
     if (!this.held && now >= this.regrabAt) {
       g.lineStyle(2, 0xfff3c4, 0.35 + Math.sin(now / 180) * 0.2);
-      g.strokeCircle(tipX, tipY, 16);
+      g.strokeCircle(tipX + sin * 8, tipY + cos * 8, 16);
     }
   }
 }

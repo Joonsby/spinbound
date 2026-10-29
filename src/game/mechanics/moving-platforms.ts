@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GIMMICK } from '../config';
 import type { Player } from '../player';
 import type { VisualSync } from '../visual-sync';
+import { PROP_KEYS } from '../../graphics/props-art';
+import { DEPTH } from '../../graphics/depth';
 
 export type MovingPlatformConfig = { x: number; y: number; axis: 'x' | 'y'; min: number; max: number; speed?: number };
 type Platform = MovingPlatformConfig & { sprite: Phaser.GameObjects.Rectangle; body: Phaser.Physics.Arcade.Body; speed: number };
@@ -26,14 +28,14 @@ export class MovingPlatforms {
       else body.setVelocityY(-speed);
       const platform = { ...config, sprite, body, speed };
       this.platforms.push(platform);
-      visuals.attach(sprite, 'moving-art', 110, 20);
+      visuals.attach(sprite, PROP_KEYS.flame, 20, 18, 17).setDepth(DEPTH.prop - 0.1);
+      visuals.attach(sprite, PROP_KEYS.platform, 110, 22, 1).setDepth(DEPTH.prop);
       // Only the top face collides, so any separation means the player stands on it.
       scene.physics.add.collider(player.sprite, sprite, () => {
         this.standing = platform;
         this.standingAt = scene.time.now;
         player.noteMovingPlatform(scene.time.now);
       });
-      scene.tweens.add({ targets: sprite, alpha: 0.65, duration: 700, yoyo: true, repeat: -1 });
     }
   }
 

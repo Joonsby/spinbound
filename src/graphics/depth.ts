@@ -1,0 +1,20 @@
+// Draw order shared by every renderer. Backgrounds are negative, the HUD lives in the DOM.
+export const DEPTH = {
+  sky: -100,
+  far: -80,
+  mid: -60,
+  near: -40,
+  ambientBack: -30,
+  terrainBack: -5,
+  terrain: 0,
+  terrainTop: 1,
+  decoration: 1.5,
+  shadow: 1.8,
+  prop: 2,
+  pickup: 2.5,
+  enemy: 3,
+  player: 4,
+  effects: 6,
+  label: 7,
+  foreground: 8,
+} as const;

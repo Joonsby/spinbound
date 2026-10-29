@@ -1,20 +1,31 @@
 import Phaser from 'phaser';
 import { STAGES, type PadKind, type StageData } from '../stages';
-import { createBackground, createTextures, THEMES } from '../visuals';
+import { createPropArt, PROP_KEYS, COIN_FRAMES, SIGN_SLICE } from '../graphics/props-art';
+import { createEnemyArt } from '../graphics/enemy-art';
+import { artScale } from '../graphics/art';
+import { DEPTH } from '../graphics/depth';
+import { addLabel } from '../graphics/display';
+import { themeForStage, type StageTheme } from '../graphics/themes';
+import { createSceneryArt } from '../graphics/scenery-art';
+import { Parallax } from '../graphics/parallax';
+import { buildTerrain, toRect } from '../graphics/terrain';
 import { GameAudio } from '../audio';
 import { GameEffects } from '../effects';
 import { bindAppEnvironment } from '../app-environment';
 import { installPerformanceDiagnostics } from '../performance';
+import { installFpsWatchdog } from '../graphics/fps-watchdog';
 import { getEquippedRobot, getPlayerProgress, unlockNextStage } from '../progress';
 import { COMBAT, GIMMICK, PHYSICS } from './config';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
 import { InputController, type Control, type InputFrame } from './input';
 import { Player } from './player';
-import { PlayerAnimator } from './player-animation';
+import { RobotRig } from '../graphics/robot-rig';
+import { createRobotArt } from '../graphics/robot-art';
+import { RENDER_SCALE_EVENT } from '../graphics/display';
 import { EnemySystem, type EnemyConfig } from './enemies';
 import { VisualSync } from './visual-sync';
 import { Hud } from './hud';
-import { SpeedCamera } from './camera';
+import { CameraController } from './camera';
 import { PadSystem } from './mechanics/pads';
 import { MovingPlatforms } from './mechanics/moving-platforms';
 import { SwingRope } from './mechanics/swing-rope';
@@ -23,8 +34,8 @@ import { MachineBoss, type BossRecoil } from './boss';
 import { installDebugHooks } from './debug';
 
 const START = { x: 90, y: 440 };
-const CHECKPOINT_INACTIVE = 0x8294b0;
-const CHECKPOINT_ACTIVE = 0x60dfb1;
+const CRYSTAL_IDLE_TINT = 0x8fa3b8;
+const FLOOR_TOP = 480;
 const BOSS_STAGE = 2;
 const WALL_HIT_STOP_MS = 40;
 const RULES: ContactRules = {
@@ -62,13 +73,18 @@ export class GameScene extends Phaser.Scene {
   private effects!: GameEffects;
   private visuals!: VisualSync;
   private player!: Player;
-  private animator!: PlayerAnimator;
-  private speedCamera!: SpeedCamera;
+  private rig!: RobotRig;
+  private cameraControl!: CameraController;
+  private wasRolling = false;
+  private stepDistance = 0;
+  // Floor tops for the contact shadow (solid and one-way platforms).
+  private surfaces: { left: number; right: number; top: number }[] = [];
   private enemies!: EnemySystem;
   private pads!: PadSystem;
   private platforms!: MovingPlatforms;
   private ropes: SwingRope[] = [];
   private boss?: MachineBoss;
+  private theme!: StageTheme;
 
   init(data: SceneData = {}) {
     this.playerStats = getPlayerProgress().stats;
@@ -94,7 +110,9 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     document.body.dataset.screen = document.documentElement.dataset.screen = 'game';
-    createTextures(this);
+    createRobotArt(this);
+    createPropArt(this);
+    createEnemyArt(this);
     const stage = STAGES[this.stageIndex];
     const spawn = this.bossTest && stage.boss ? { x: stage.boss.entry + 40, y: 450 } : START;
     if (this.bossTest) this.respawnPoint = spawn;
@@ -104,9 +122,9 @@ export class GameScene extends Phaser.Scene {
     this.effects = new GameEffects(this);
     this.visuals = new VisualSync(this);
     this.controls = new InputController(this);
-    this.cameras.main.setZoom(1);
-    const theme = THEMES[stage.theme];
+    const theme = this.theme = themeForStage(stage.theme);
     document.body.style.setProperty('--accent', theme.accent);
+    this.cameras.main.setBackgroundColor(theme.sky[0]);
     document.body.dataset.theme = String(stage.theme);
     this.hud.setStage(this.stageIndex, STAGES.length);
     this.hud.setStatus(`${stage.name} · ← → 이동 · 점프 · 빠르게 달리면 자동 구르기`);
@@ -115,7 +133,10 @@ export class GameScene extends Phaser.Scene {
     const { solid, oneWay } = this.buildTerrain(stage);
 
     this.player = new Player(this, spawn.x, spawn.y);
-    this.animator = new PlayerAnimator(this, this.player.sprite, this.robot.animationPrefix);
+    this.rig = new RobotRig(this, spawn.x, spawn.y + 21);
+    this.wasRolling = false;
+    this.surfaces = [...stage.platforms, ...(stage.oneWayPlatforms ?? [])]
+      .map(([x, y, width, height]) => ({ left: x - width / 2, right: x + width / 2, top: y - height / 2 }));
     this.physics.add.collider(this.player.sprite, solid);
     this.physics.add.collider(this.player.sprite, oneWay, undefined, (_player, block) => {
       const body = (block as Phaser.GameObjects.Rectangle).body as Phaser.Physics.Arcade.StaticBody;
@@ -130,16 +151,18 @@ export class GameScene extends Phaser.Scene {
       ...stage.enemies.map(([min, max]): EnemyConfig => ({ kind: 'patrol', x: min, y: 462, min, max })),
       ...(stage.enemyDetails ?? []),
     ];
-    this.enemies = new EnemySystem(this, enemyConfigs, this.visuals, this.stageIndex === 0);
+    this.enemies = new EnemySystem(this, enemyConfigs, this.stageIndex === 0);
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
     if (stage.boss) this.createBoss(stage);
 
-    this.cameras.main.setBounds(0, 0, stage.width, 600);
-    this.speedCamera = new SpeedCamera(this.cameras.main, this.player.sprite);
-    this.speedCamera.follow(spawn.x, spawn.y);
+    this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width);
+    this.cameraControl.follow(spawn.x, spawn.y);
+    const onRenderScale = () => this.cameraControl.apply();
+    this.game.events.on(RENDER_SCALE_EVENT, onRenderScale);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render, this);
     const unbindEnvironment = bindAppEnvironment(this, () => this.resetInput(), () => this.audio.pauseForBackground(), () => this.audio.resumeFromBackground());
     installPerformanceDiagnostics(this);
+    installFpsWatchdog(this);
     installDebugHooks(this, {
       scene: this,
       state: () => this.debugState(),
@@ -149,6 +172,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       unbindEnvironment();
+      this.game.events.off(RENDER_SCALE_EVENT, onRenderScale);
       this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render, this);
       this.resultTimer?.remove(false);
       this.controls.destroy();
@@ -163,37 +187,43 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildTerrain(stage: StageData) {
-    const theme = THEMES[stage.theme];
-    const trackGraphic = createBackground(this, stage.theme, stage.width);
+    const theme = this.theme;
+    createSceneryArt(this, theme);
+    new Parallax(this, theme);
     const solid = this.physics.add.staticGroup();
     const oneWay = this.physics.add.staticGroup();
-    const platform = (x: number, y: number, width: number, height: number, isOneWay = false) => {
-      const block = this.add.rectangle(x, y, width, height, theme.soil, 0);
-      block.setVisible(false);
-      this.physics.add.existing(block, true);
-      (isOneWay ? oneWay : solid).add(block);
-      this.add.tileSprite(x, y, width, height, `terrain-${stage.theme}`);
-      const trim = this.add.graphics();
-      trackGraphic(trim, x - width / 2, x + width / 2);
-      trim.fillStyle(theme.top);
-      trim.fillRoundedRect(x - width / 2, y - height / 2, width, 8, 3);
-      trim.fillStyle(theme.top, 0.65);
-      for (let dx = 8; dx < width; dx += 28) trim.fillTriangle(x - width / 2 + dx, y - height / 2 + 6, x - width / 2 + dx + 5, y - height / 2 + 13, x - width / 2 + dx + 11, y - height / 2 + 6);
+    const block = ([x, y, width, height]: [number, number, number, number], group: Phaser.Physics.Arcade.StaticGroup) => {
+      const rect = this.add.rectangle(x, y, width, height, 0x000000, 0).setVisible(false);
+      this.physics.add.existing(rect, true);
+      group.add(rect);
     };
-    stage.platforms.forEach(([x, y, width, height]) => platform(x, y, width, height));
-    stage.oneWayPlatforms?.forEach(([x, y, width, height]) => platform(x, y, width, height, true));
-    stage.signs?.forEach((sign) => this.add.text(sign.x, sign.y, sign.text, { fontSize: '14px', color: '#fff4cf', backgroundColor: '#294d49', padding: { x: 10, y: 7 } }).setOrigin(0.5));
+    stage.platforms.forEach((platform) => block(platform, solid));
+    stage.oneWayPlatforms?.forEach((platform) => block(platform, oneWay));
+    const avoid = [...stage.spikes, ...(stage.traps ?? []).map(([x]) => x), ...stage.pads.map(([x]) => x), ...(stage.walls ?? []).map((wall) => wall.x)];
+    buildTerrain(this, theme, stage.platforms.map(toRect), (stage.oneWayPlatforms ?? []).map(toRect), avoid);
+    stage.signs?.forEach((sign) => this.addSign(sign.x, sign.y, sign.text));
     return { solid, oneWay };
+  }
+
+  private addSign(x: number, y: number, text: string) {
+    const label = addLabel(this, x, y, text, { fontSize: '14px', fontStyle: 'bold', color: '#FFF4DC', stroke: '#5A3418', strokeThickness: 3 }).setOrigin(0.5).setDepth(DEPTH.prop + 0.2);
+    const scale = artScale(PROP_KEYS.sign);
+    const board = this.add.nineslice(x, y, PROP_KEYS.sign, undefined, (label.width + 26) * scale, (label.height + 14) * scale, SIGN_SLICE * scale, SIGN_SLICE * scale, SIGN_SLICE * scale, SIGN_SLICE * scale)
+      .setScale(1 / scale).setDepth(DEPTH.prop + 0.1);
+    const postTop = y + board.displayHeight / 2 - 4;
+    if (postTop < FLOOR_TOP) {
+      this.add.image(x, postTop, PROP_KEYS.post).setOrigin(0.5, 0).setDepth(DEPTH.prop).setDisplaySize(8, FLOOR_TOP - postTop + 2);
+    }
   }
 
   private buildPickups(stage: StageData) {
     const coins = this.physics.add.staticGroup();
-    for (const [x, y] of stage.coins) {
+    stage.coins.forEach(([x, y], index) => {
       const coin = this.add.circle(x, y, 11, 0xffd35a);
       this.physics.add.existing(coin, true);
       coins.add(coin);
-      this.visuals.attach(coin, 'coin-0', 28, 28).play('coin-spin');
-    }
+      this.visuals.attach(coin, PROP_KEYS.coin(0), 28, 28).setDepth(DEPTH.pickup).play({ key: PROP_KEYS.coinSpin, startFrame: index % COIN_FRAMES });
+    });
     this.updateScore();
     this.physics.add.overlap(this.player.sprite, coins, (_player, object) => {
       const coin = object as Phaser.GameObjects.Arc;
@@ -201,8 +231,9 @@ export class GameScene extends Phaser.Scene {
       coin.setActive(false).setVisible(false);
       (coin.body as Phaser.Physics.Arcade.StaticBody).enable = false;
       this.coinCount += 1;
+      this.rig.event('happy');
       this.audio.play('coin');
-      this.effects.burst(coin.x, coin.y, 0xffe18a, 8);
+      this.effects.coin(coin.x, coin.y);
       this.updateScore();
     });
 
@@ -213,7 +244,7 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.existing(spike, true);
       hazards.add(spike);
       (spike.body as Phaser.Physics.Arcade.StaticBody).setSize(24, 24).setOffset(6, 6);
-      this.visuals.attach(spike, 'spike-art', 36, 30);
+      this.visuals.attach(spike, PROP_KEYS.spike, 36, 30).setDepth(DEPTH.prop);
     }
     this.physics.add.overlap(this.player.sprite, hazards, (_player, object) => {
       const spike = object as Phaser.GameObjects.Triangle;
@@ -226,7 +257,8 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.existing(star, true);
       star.setData('score', reward.score);
       rewards.add(star);
-      this.visuals.attach(star, 'reward-star', 38, 38);
+      const visual = this.visuals.attach(star, PROP_KEYS.star, 40, 42).setDepth(DEPTH.pickup);
+      this.tweens.add({ targets: visual, y: reward.y - 5, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     });
     this.physics.add.overlap(this.player.sprite, rewards, (_player, object) => {
       const reward = object as Phaser.GameObjects.Rectangle;
@@ -236,48 +268,54 @@ export class GameScene extends Phaser.Scene {
       this.enemyScore += reward.getData('score') as number;
       this.updateScore();
       this.audio.play('coin');
-      this.effects.burst(reward.x, reward.y, 0xffd578, 12, 150);
+      this.effects.reward(reward.x, reward.y);
+      this.rig.event('happy');
       this.hud.setStatus(`숨겨진 보상! +${reward.getData('score')}점`);
     });
 
     const checkpoints = stage.checkpoints ?? [stage.checkpoint];
     checkpoints.forEach((point, index) => {
-      const pole = this.add.rectangle(point.x, point.y - 20, 8, 100, CHECKPOINT_INACTIVE);
-      const flag = this.add.triangle(point.x + 23, point.y - 54, 0, 0, 38, 14, 0, 28, CHECKPOINT_INACTIVE);
-      this.add.text(point.x - 50, point.y - 94, 'CHECKPOINT', { fontSize: '13px', color: '#bad0e4' });
+      const floor = point.y + 30;
+      const pole = this.add.rectangle(point.x, point.y - 20, 8, 100, 0x000000, 0);
+      this.add.image(point.x, floor + 2, PROP_KEYS.checkpointBase).setOrigin(0.5, 1).setDepth(DEPTH.prop).setScale(1 / artScale(PROP_KEYS.checkpointBase));
+      const crystal = this.add.image(point.x, floor - 24, PROP_KEYS.crystal).setOrigin(0.5, 1).setDepth(DEPTH.prop + 0.1)
+        .setScale(1 / artScale(PROP_KEYS.crystal)).setTint(CRYSTAL_IDLE_TINT);
+      this.tweens.add({ targets: crystal, y: floor - 28, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       this.physics.add.existing(pole, true);
       this.physics.add.overlap(this.player.sprite, pole, () => {
         if (this.finished || this.bossTest || index <= this.lastCheckpoint) return;
         this.lastCheckpoint = index;
         this.checkpointActive = true;
         this.respawnPoint = point;
-        pole.setFillStyle(CHECKPOINT_ACTIVE);
-        flag.setFillStyle(CHECKPOINT_ACTIVE);
+        crystal.clearTint();
+        this.effects.checkpoint(point.x, floor - 40);
+        this.audio.play('grab');
         this.hud.setStatus('체크포인트 활성화! 다음 부활은 이곳에서');
       });
     });
 
     const goalX = stage.width - 130;
     const goalY = stage.goalY ?? 420;
-    this.add.rectangle(goalX, goalY, 6, 120, 0xeaf2ff);
-    this.add.triangle(goalX + 27, goalY - 42, 0, 0, 48, 18, 0, 36, 0x60dfb1);
-    this.add.text(goalX - 42, goalY - 90, 'GOAL', { fontSize: '16px', color: '#60dfb1' });
-    const goal = this.add.rectangle(goalX, goalY, 44, 120, 0x60dfb1, 0.12);
+    const goalFloor = goalY + 60;
+    const portal = this.add.image(goalX, goalFloor - 4, PROP_KEYS.portal).setOrigin(0.5, 1).setDepth(DEPTH.prop - 0.1).setScale(1 / artScale(PROP_KEYS.portal));
+    this.tweens.add({ targets: portal, alpha: 0.55, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.add.image(goalX, goalFloor + 2, PROP_KEYS.goal).setOrigin(0.5, 1).setDepth(DEPTH.prop).setScale(1 / artScale(PROP_KEYS.goal));
+    const goal = this.add.rectangle(goalX, goalY, 44, 120, 0x60dfb1, 0);
     this.physics.add.existing(goal, true);
     this.physics.add.overlap(this.player.sprite, goal, () => {
       if (!this.boss || this.boss.defeated) this.endStage(true);
     });
-    if (stage.boss) this.add.text(goalX - 70, 285, '보스를 처치하면 클리어', { fontSize: '13px', color: '#ffc1a0' });
+    if (stage.boss) this.addSign(goalX - 10, goalFloor - 190, '보스를 처치하면 클리어');
   }
 
   private createBoss(stage: StageData) {
-    this.boss = new MachineBoss(this, stage.boss!, this.player.sprite, stage.width, this.effects, {
+    this.boss = new MachineBoss(this, stage.boss!, this.player.sprite, this.effects, {
       contact: (body) => classifyContact(this.player.contactBox(), this.player.rolling, this.toBox(body), RULES),
       hurt: (x) => { this.takeHit(x); },
       recoil: (x, kind) => this.bossRecoil(x, kind),
       struck: (x, y) => {
         this.audio.play('boss-hit');
-        this.effects.impact(x, y, 0xffd58a);
+        this.effects.bigImpact(x, y);
         this.cameras.main.shake(110, 0.005);
         this.hitStop(COMBAT.bossHitStopMs);
       },
@@ -285,14 +323,17 @@ export class GameScene extends Phaser.Scene {
         this.enemyScore += COMBAT.enemyScore;
         this.updateScore();
         this.audio.play('enemy');
-        this.effects.burst(x, y, 0x94dcca, 10, 140);
+        this.effects.impact(x, y, 0x94dcca);
+        this.effects.popup(x, y - 26, `+${COMBAT.enemyScore}`);
       },
       defeated: (x, y) => {
         this.enemyScore += COMBAT.bossScore;
-        this.updateScore(); this.audio.play('enemy'); this.effects.burst(x, y, 0xffd58a, 12, 180);
+        this.updateScore(); this.audio.play('enemy'); this.effects.bigImpact(x, y); this.effects.popup(x, y - 60, `+${COMBAT.bossScore}`);
         this.endStage(true);
       },
       damagePerHit: this.playerStats.attack,
+      frameArena: (left, right, ground) => this.cameraControl.frameArena(left, right, ground),
+      releaseCamera: () => this.cameraControl.release(this.player.x, this.player.y),
     });
   }
 
@@ -342,6 +383,8 @@ export class GameScene extends Phaser.Scene {
     this.audio.play(contact === 'stomp' ? 'stomp' : 'enemy');
     this.effects.impact(x, y, contact === 'stomp' ? 0xfff0b0 : 0xe4b6ff);
     if (result === 'defeated') {
+      this.rig.event('happy');
+      this.effects.popup(x, y - 28, `+${COMBAT.enemyScore}`);
       this.enemyScore += COMBAT.enemyScore;
       this.updateScore();
       this.hitStop(COMBAT.hitStopMs);
@@ -364,19 +407,19 @@ export class GameScene extends Phaser.Scene {
     if (kind === 'boost') {
       this.player.boost(now);
       this.audio.play('boost');
-      this.effects.ring(this.player.x, this.player.y, 0x6ce2de, 1.2);
+      this.effects.boostEntry(this.player.x, this.player.y);
       return;
     }
     const direction = kind === 'spring-right' ? 1 : kind === 'spring-left' ? -1 : 0;
     this.player.launch(now, direction ? direction * GIMMICK.springDiagonalX : undefined, -(direction ? GIMMICK.springDiagonalY : GIMMICK.springSpeed));
     this.audio.play('spring');
-    this.effects.burst(x, y - 8, 0xffc27a, 8, 140);
+    this.rig.event('spring');
+    this.effects.spring(x, y - 8);
   }
 
   private onWallBreak(x: number, y: number) {
     this.audio.play('break');
-    this.effects.debris(x, y, 0xb79572, 12);
-    this.effects.ring(x, y, 0xffe1a8, 1.4);
+    this.effects.wallBreak(x, y);
     this.cameras.main.shake(100, 0.004);
     this.hitStop(WALL_HIT_STOP_MS);
     this.hud.setStatus('벽을 부쉈다! 숨겨진 길');
@@ -427,9 +470,11 @@ export class GameScene extends Phaser.Scene {
     this.resetInput();
     const spawn = this.respawnPoint;
     this.player.respawn(spawn.x, spawn.y, now);
-    this.animator.reset();
+    this.rig.reset();
+    this.wasRolling = false;
     this.effects.clear();
-    this.speedCamera.snap(spawn.x, spawn.y, 1);
+    this.cameraControl.release(spawn.x, spawn.y);
+    this.cameraControl.snap(spawn.x, spawn.y, 1);
     this.hud.setStatus(`${this.checkpointActive ? '체크포인트' : '시작 지점'}에서 부활 · ${this.deaths}회`);
   }
 
@@ -450,6 +495,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.finished) {
       this.detachRopes();
       this.player.knockback(this.time.now, sourceX);
+      this.rig.event('hurt');
     }
     return true;
   }
@@ -472,16 +518,19 @@ export class GameScene extends Phaser.Scene {
     else this.player.die();
     this.physics.pause();
     this.audio.stopMusic();
+    this.audio.play(cleared ? 'clear' : 'death');
     const allCleared = cleared && this.stageIndex === STAGES.length - 1;
     if (cleared && !this.bossTest) unlockNextStage(this.stageIndex + 1, STAGES.length);
     this.hud.setStatus(cleared ? (allCleared ? '전체 스테이지 클리어! 축하합니다' : `Stage ${this.stageIndex + 1} 클리어!`) : 'HP가 모두 소진되었습니다');
     const showResult = () => this.hud.showResult(
+      cleared ? 'clear' : 'over',
       cleared ? (allCleared ? 'ALL CLEAR!' : 'STAGE CLEAR!') : 'GAME OVER',
-      `점수 ${this.coinCount * COMBAT.coinScore + this.enemyScore}점 · 코인 ${this.coinCount}개`,
+      this.coinCount * COMBAT.coinScore + this.enemyScore,
+      this.coinCount,
       cleared && !allCleared && !this.bossTest,
       this.bossTest ? '보스 재도전' : cleared ? 'Stage 1부터 다시 시작' : `Stage ${this.stageIndex + 1}에서 부활 (HP ${this.playerStats.maxHp})`,
     );
-    if (cleared) this.cameras.main.zoomTo(1.15, 450, 'Sine.easeOut');
+    if (cleared) { this.cameraControl.celebrate(this); this.effects.confetti(this.player.x, this.player.y - 20); }
     else this.effects.burst(this.player.x, this.player.y, 0xd7dde0, 12, 120);
     this.resultTimer = this.time.delayedCall(cleared ? 480 : 650, showResult);
   }
@@ -501,13 +550,18 @@ export class GameScene extends Phaser.Scene {
       heldRope.release(player, now, input.direction);
       input.jumpPressed = false;
       this.audio.play('jump');
+      this.rig.event('release');
     }
     const step = player.update(now, delta, input, this.platforms.carryVx());
-    if (step.jumped) this.audio.play('jump');
-    if (step.landed && step.landingSpeed > 100) this.audio.play('land');
+    if (step.jumped) { this.audio.play('jump'); this.rig.event('jump'); this.effects.jump(player.x, player.body.bottom); }
+    if (step.landed) {
+      this.rig.event('land', Phaser.Math.Clamp(step.landingSpeed / 650, 0.35, 1.3));
+      if (step.landingSpeed > 100) this.audio.play('land');
+      if (step.landingSpeed > 260) this.effects.land(player.x, player.body.bottom, Phaser.Math.Clamp(step.landingSpeed / 650, 0.5, 1.3));
+    }
     for (const rope of this.ropes) {
       rope.update(now, delta, player, rope.held ? input.direction : 0);
-      if (!rope.held && rope.tryGrab(player, now)) this.audio.play('grab');
+      if (!rope.held && rope.tryGrab(player, now)) { this.audio.play('grab'); this.rig.event('grab'); }
     }
     this.boss?.update(now);
     this.platforms.update();
@@ -540,32 +594,53 @@ export class GameScene extends Phaser.Scene {
     this.effects.update(delta);
     const view = this.cameras.main.worldView;
     this.visuals.update(view);
-    this.enemies.syncHealthBars(view);
+    this.enemies.render(view, now);
     for (const rope of this.ropes) rope.draw(view, now);
     const vx = player.body.velocity.x;
     const speed = Math.abs(vx);
-    const pose = player.pose(now);
-    const entered = this.animator.update({
-      pose, speed,
-      facing: speed > 8 && !this.finished ? Math.sign(vx) : player.facing,
-      tilt: this.ropes.find((rope) => rope.held)?.tilt ?? 0,
+    const grounded = player.isGrounded(now);
+    const input = this.frameInput;
+    const skidding = grounded && !player.rolling && speed > 90 && input.direction !== 0 && input.direction !== Math.sign(vx);
+    this.rig.update({
+      now, deltaMs: delta, x: player.x, bottom: player.body.bottom, centerY: player.y,
+      groundY: grounded ? player.body.bottom : this.groundBelow(player.x, player.body.bottom),
+      vx, vy: player.body.velocity.y, grounded, rolling: player.rolling, held: player.held,
+      hurt: player.isHurt(now), dead: player.dead,
+      skidding,
       flicker: !this.finished && player.isInvulnerable(now) && Math.floor(now / 80) % 2 === 0,
-      boosted: player.isBoosted(now),
+      facing: speed > 8 && !this.finished ? Math.sign(vx) : player.facing,
+      ropeTilt: this.ropes.find((rope) => rope.held)?.tilt ?? 0,
     });
-    if (this.finished) {
-      if (pose !== 'dead') this.animator.freeze();
-      return;
+    this.audio.setRollHum(!this.finished && player.rolling && grounded, speed);
+    if (this.finished) return;
+    if (grounded && !player.rolling && speed > 60) {
+      this.stepDistance += speed * Math.min(delta, 50) / 1000;
+      if (this.stepDistance > 46) { this.stepDistance = 0; this.audio.play('step'); }
     }
-    if (entered) {
+    if (player.rolling && !this.wasRolling) {
       this.audio.play('roll');
       this.effects.ring(player.x, player.y + 6, 0xcaffef, 0.7);
     }
+    this.wasRolling = player.rolling;
     if (!this.hitStopUntil) {
-      if (pose === 'roll' || player.isBoosted(now)) this.effects.trail(this.animator.sprite, now);
-      if (player.isGrounded(now) && speed > PHYSICS.runSpeed * 0.9) this.effects.dust(player.x, player.body.bottom - 3, Math.sign(vx), now);
+      const direction = Math.sign(vx) || player.facing;
+      if (player.rolling) {
+        this.effects.trail(this.rig.ghost(), now);
+        if (grounded) this.effects.rollSparks(player.x, player.body.bottom, direction, now);
+      } else if (grounded && speed > PHYSICS.runSpeed * 0.75) this.effects.dust(player.x, player.body.bottom - 3, direction, now);
+      if (skidding) this.effects.skid(player.x, player.body.bottom, direction, now);
+      if (player.isBoosted(now)) this.effects.boostStreaks(player.x, player.y, direction, now);
     }
-    this.speedCamera.update(delta, vx, player.facing);
+    this.cameraControl.update(delta, vx, player.facing);
     this.hud.setSpeed(speed, player.rolling);
+  }
+
+  private groundBelow(x: number, y: number) {
+    let top: number | undefined;
+    for (const surface of this.surfaces) {
+      if (x >= surface.left && x <= surface.right && surface.top >= y - 2 && (top === undefined || surface.top < top)) top = surface.top;
+    }
+    return top;
   }
 
   private debugState() {

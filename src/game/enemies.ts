@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { COMBAT, PHYSICS } from './config';
 import { MonsterHealthBar } from '../health-bar';
 import type { EnemyKind } from '../stages';
-import type { VisualSync } from './visual-sync';
+import { EnemyVisual } from '../graphics/enemy-art';
 
 export type EnemyConfig = { kind: EnemyKind; x: number; y: number; min: number; max: number };
 
@@ -10,7 +10,7 @@ export type Enemy = {
   kind: EnemyKind;
   sprite: Phaser.GameObjects.Rectangle;
   body: Phaser.Physics.Arcade.Body;
-  visual: Phaser.GameObjects.Sprite;
+  visual: EnemyVisual;
   healthBar?: MonsterHealthBar;
   min: number;
   max: number;
@@ -34,19 +34,19 @@ export class EnemySystem {
   readonly list: Enemy[] = [];
   private byObject = new Map<Phaser.GameObjects.GameObject, Enemy>();
 
-  constructor(private scene: Phaser.Scene, configs: EnemyConfig[], visuals: VisualSync, private onScreenGrace: boolean) {
+  constructor(scene: Phaser.Scene, configs: EnemyConfig[], private onScreenGrace: boolean) {
     this.group = scene.physics.add.group({ allowGravity: false });
     for (const { kind, x, y, min, max } of configs) {
-      const sprite = scene.add.rectangle(x, y, 34, 36, 0xd783ff);
+      // Invisible hitbox; EnemyVisual draws the monster.
+      const sprite = scene.add.rectangle(x, y, 34, 36, 0xd783ff, 0);
       scene.physics.add.existing(sprite);
       this.group.add(sprite);
       const body = sprite.body as Phaser.Physics.Arcade.Body;
       body.setAllowGravity(false).setVelocityX(kind === 'charger' ? 0 : COMBAT.enemySpeed);
-      const key = kind === 'fly' ? 'enemy-fly' : kind === 'charger' ? 'enemy-charge' : 'enemy';
-      const visual = visuals.attach(sprite, `${key}-0`, kind === 'fly' ? 56 : 44, 42, -3, true).play(kind === 'patrol' ? 'enemy-walk' : key);
+      const visual = new EnemyVisual(scene, kind, x, y + 18);
       const maxHp = COMBAT.enemyHp[kind];
       const enemy: Enemy = {
-        kind, sprite, body, visual, min, max, baseY: y, hp: maxHp, maxHp, state: 'idle', until: 0, direction: 1, knockedUntil: 0,
+        kind, sprite, body, visual, min, max, baseY: y, hp: maxHp, maxHp, state: 'idle', until: 0, direction: kind === 'charger' ? -1 : 1, knockedUntil: 0,
         contactReadyAt: onScreenGrace ? Infinity : 0, nextHitAt: 0,
         healthBar: kind === 'charger' ? new MonsterHealthBar(scene) : undefined,
       };
@@ -62,7 +62,7 @@ export class EnemySystem {
   update(now: number, view: Phaser.Geom.Rectangle, playerX: number, playerY: number, playerSpeed: number) {
     for (const enemy of this.list) {
       if (!enemy.sprite.active) continue;
-      const { body, sprite, visual } = enemy;
+      const { body } = enemy;
       const visible = Phaser.Geom.Rectangle.Contains(view, body.center.x, body.center.y);
       if (this.onScreenGrace) {
         if (!visible) enemy.contactReadyAt = Infinity;
@@ -113,13 +113,6 @@ export class EnemySystem {
           body.setVelocityX(0);
         } else body.setVelocityX(enemy.direction * COMBAT.chargeSpeed);
       } else if (enemy.state === 'recover' && now >= enemy.until) enemy.state = 'idle';
-      if (enemy.state === 'windup') {
-        visual.setTint(0xffa45c);
-        sprite.setAlpha(Math.floor(now / 100) % 2 ? 0.55 : 1);
-      } else if (enemy.state === 'recover') {
-        visual.setTint(0xbfc9ff);
-        sprite.setAlpha(1);
-      } else { visual.clearTint(); sprite.setAlpha(1); }
     }
   }
 
@@ -134,6 +127,7 @@ export class EnemySystem {
     enemy.nextHitAt = now + COMBAT.enemyHitCooldownMs;
     enemy.hp = Math.max(0, enemy.hp - (enemy.kind === 'charger' && enemy.state === 'recover' ? amount * 2 : amount));
     if (enemy.hp === 0) { this.defeat(enemy, fromX); return 'defeated'; }
+    enemy.visual.flash(now);
     const direction = enemy.body.center.x < fromX ? -1 : 1;
     // The attacker bounces off; a short grace keeps the rebound from turning into a hit.
     enemy.contactReadyAt = Math.max(enemy.contactReadyAt, now + 400);
@@ -149,15 +143,17 @@ export class EnemySystem {
     body.enable = false;
     body.setVelocity(0, 0);
     enemy.healthBar?.hide();
-    enemy.visual.clearTint();
-    this.scene.tweens.killTweensOf(sprite);
-    sprite.setAlpha(1);
-    const direction = fromX < sprite.x ? 1 : -1;
-    this.scene.tweens.add({ targets: sprite, x: sprite.x + direction * 44, y: sprite.y - 45, angle: direction * 140, scaleX: 0.2, scaleY: 0.2, alpha: 0, duration: 380, ease: 'Quad.easeIn', onComplete: () => sprite.setVisible(false) });
+    enemy.visual.defeat(fromX);
   }
 
-  syncHealthBars(view: Phaser.Geom.Rectangle) {
+  // POST_UPDATE: place visuals on the settled hitboxes.
+  render(view: Phaser.Geom.Rectangle, now: number) {
     for (const enemy of this.list) {
+      const { body } = enemy;
+      if (enemy.sprite.active) {
+        const facing = enemy.kind === 'charger' ? enemy.direction : Math.sign(body.velocity.x) || enemy.direction;
+        enemy.visual.update({ now, x: body.center.x, bottom: body.bottom, centerY: body.center.y, vx: body.velocity.x, facing, state: enemy.state });
+      }
       enemy.healthBar?.update(enemy.body.center.x, enemy.body.top - 11, enemy.hp, enemy.maxHp,
         enemy.sprite.active && enemy.body.right >= view.left && enemy.body.left <= view.right);
     }

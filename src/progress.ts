@@ -1,4 +1,7 @@
-export const ROBOTS = [{ id: 'orange-01', name: '오렌지-01', texture: 'robot-idle-0', animationPrefix: 'robot' }];
+import type { QualitySetting } from './graphics/quality';
+
+export const ROBOTS = [{ id: 'orange-01', name: '오렌지-01', texture: 'robot-portrait', blinkTexture: 'robot-portrait-blink' }];
+const QUALITY_SETTINGS: QualitySetting[] = ['auto', 'low', 'medium', 'high'];
 export const ITEMS: Record<string, string> = { 'repair-kit': '수리 키트', 'energy-cell': '에너지 셀' };
 export type PlayerProgress = {
   version: 1;
@@ -11,10 +14,11 @@ export type PlayerProgress = {
   unlockedStage: number;
   items: string[];
   soundEnabled: boolean;
+  graphicsQuality: QualitySetting;
 };
 const KEY = 'sprout-hop:player-progress:v1';
 let progress: PlayerProgress | undefined;
-const defaults = (): PlayerProgress => ({ version: 1, level: 1, currency: 0, stats: { attack: 10, defense: 0, maxHp: 3, maxEnergy: 100 }, ownedCharacters: ['orange-01'], equippedCharacter: 'orange-01', unlockedStage: 1, items: [], soundEnabled: true });
+const defaults = (): PlayerProgress => ({ version: 1, level: 1, currency: 0, stats: { attack: 10, defense: 0, maxHp: 3, maxEnergy: 100 }, ownedCharacters: ['orange-01'], equippedCharacter: 'orange-01', unlockedStage: 1, items: [], soundEnabled: true, graphicsQuality: 'auto' });
 const number = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.floor(value))) : fallback;
 function recover(value: unknown): PlayerProgress {
   const base = defaults();
@@ -30,6 +34,7 @@ function recover(value: unknown): PlayerProgress {
     unlockedStage: number(data.unlockedStage, 1, 1, 10),
     items: Array.isArray(data.items) ? data.items.filter((item): item is string => typeof item === 'string' && Object.hasOwnProperty.call(ITEMS, item)).slice(0, 500) : [],
     soundEnabled: typeof data.soundEnabled === 'boolean' ? data.soundEnabled : true,
+    graphicsQuality: QUALITY_SETTINGS.includes(data.graphicsQuality as QualitySetting) ? data.graphicsQuality as QualitySetting : 'auto',
   };
 }
 export function savePlayerProgress(value: PlayerProgress) {
