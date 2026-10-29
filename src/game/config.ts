@@ -72,6 +72,15 @@ export const ECONOMY = {
 };
 export type EconomyTuning = typeof ECONOMY;
 
+// Permanent coin upgrades (강화 menu): each level adds `step`; costs[i] buys level i + 1.
+export const UPGRADES = {
+  attack: { base: 10, step: 2, costs: [100, 150, 220, 320, 450, 600, 800, 1050, 1350, 1700] },
+  defense: { base: 0, step: 5, costs: [150, 250, 380, 550, 750, 1000, 1300, 1650] },
+  maxHp: { base: 3, step: 1, costs: [300, 700, 1500] },
+};
+export type UpgradeRule = { base: number; step: number; costs: number[] };
+export type StatKey = keyof typeof UPGRADES;
+
 // Pre-stage items (ITEMS in progress.ts).
 export const BOOSTS = {
   // Coins this close to the robot fly in on their own.

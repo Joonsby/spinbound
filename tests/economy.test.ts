@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ECONOMY } from '../src/game/config.ts';
-import { bossBonus, buyItem, clearReward, reviveOffer, takeItems } from '../src/game/economy.ts';
+import { ECONOMY, UPGRADES } from '../src/game/config.ts';
+import { bossBonus, buyItem, buyUpgrade, clearReward, reviveOffer, takeItems, upgradeCost, upgradeLevel } from '../src/game/economy.ts';
 
 test('a clear pays the coins picked up plus the bonus', () => {
   assert.equal(clearReward(37, ECONOMY), 37 + ECONOMY.clearBonus);
@@ -19,6 +19,31 @@ test('no revive before a checkpoint; paying needs enough coins', () => {
 test('boss bonus grows with the boss level', () => {
   assert.equal(bossBonus(1, ECONOMY), ECONOMY.bossBonus);
   assert.equal(bossBonus(10, ECONOMY), ECONOMY.bossBonus + 9 * ECONOMY.bossBonusPerLevel);
+});
+
+test('upgrades climb one level per purchase and stop at the top', () => {
+  const rule = UPGRADES.maxHp;
+  const wallet = { currency: 10000, stats: { attack: 10, defense: 0, maxHp: rule.base } };
+  assert.equal(upgradeLevel(wallet.stats.maxHp, rule), 0);
+  for (const cost of rule.costs) {
+    const before = wallet.currency;
+    assert.equal(buyUpgrade(wallet, 'maxHp', rule), true);
+    assert.equal(before - wallet.currency, cost);
+  }
+  assert.equal(wallet.stats.maxHp, rule.base + rule.step * rule.costs.length);
+  assert.equal(upgradeCost(wallet.stats.maxHp, rule), null);
+  assert.equal(buyUpgrade(wallet, 'maxHp', rule), false);
+});
+
+test('an upgrade needs enough coins and changes nothing otherwise', () => {
+  const wallet = { currency: UPGRADES.attack.costs[0] - 1, stats: { attack: 10, defense: 0, maxHp: 3 } };
+  assert.equal(buyUpgrade(wallet, 'attack', UPGRADES.attack), false);
+  assert.deepEqual(wallet, { currency: UPGRADES.attack.costs[0] - 1, stats: { attack: 10, defense: 0, maxHp: 3 } });
+});
+
+test('defense never reaches a hit that costs nothing', () => {
+  const { base, step, costs } = UPGRADES.defense;
+  assert.ok(base + step * costs.length <= 50);
 });
 
 test('buying needs enough coins and adds one item', () => {

@@ -3,7 +3,7 @@ import { RARITY_LABELS, type Character } from '../characters';
 
 const SPEED_STEPS = 24;
 // Above this many hit points the HUD shows numbers instead of hearts.
-const MAX_HEARTS = 6;
+const MAX_HEARTS = 7;
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
@@ -81,10 +81,13 @@ export class Hud {
     if (text === this.shownHp) return;
     this.shownHp = text;
     this.hp.setAttribute('aria-label', `HP ${text}`);
-    if (maxHp > MAX_HEARTS) { this.hp.textContent = text; return; }
+    if (maxHp > MAX_HEARTS) { this.hp.textContent = `${Math.round(hp * 10) / 10} / ${maxHp}`; return; }
+    // Defense makes hits cost part of a heart; a partly lost heart is drawn partly filled.
     this.hp.replaceChildren(...Array.from({ length: maxHp }, (_, index) => {
       const heart = document.createElement('i');
-      heart.className = index < hp ? 'heart' : 'heart lost';
+      const fill = Math.max(0, Math.min(1, hp - index));
+      heart.className = fill > 0 ? 'heart' : 'heart lost';
+      if (fill > 0 && fill < 1) heart.style.setProperty('--fill', fill.toFixed(2));
       return heart;
     }));
   }

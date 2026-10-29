@@ -3,7 +3,9 @@ import { createRobotArt, robotPortraitUrl } from './graphics/robot-art';
 import { PORTRAIT_BLINK_KEY, PORTRAIT_KEY } from './graphics/asset-manifest';
 import { CHARACTERS, RARITY_LABELS, type Character } from './characters';
 import { STAGES_PER_WORLD, WORLD_NAMES, worldOf } from './stage-gen';
-import { buyCharacter, buyItem, equipCharacter, getEquippedRobot, getPlayerProgress, itemCount, savePlayerProgress, useItems, ITEM_IDS, ITEMS, type ItemId } from './progress';
+import { UPGRADES, type StatKey } from './game/config';
+import { upgradeCost, upgradeLevel } from './game/economy';
+import { buyCharacter, buyItem, equipCharacter, getEquippedRobot, getPlayerProgress, itemCount, savePlayerProgress, useItems, ITEM_IDS, ITEMS, upgradeStat, type ItemId } from './progress';
 import type { SceneData } from './game/game-scene';
 import { getSoundEnabled, setSoundEnabled } from './audio';
 import { STAGES, type StageData } from './stages';
@@ -69,6 +71,30 @@ function characterCard(character: Character, confirming: string) {
   else if (unlock.kind === 'coins') action = `<button data-buy-robot="${id}" aria-label="${name} 코인 ${unlock.price}개로 구매" ${player.currency < unlock.price ? 'disabled' : ''}>${confirming === id ? '한 번 더 누르면 구매' : `${coin}${unlock.price}`}</button>`;
   else action = `<button disabled aria-label="${unlock.kind === 'boss' ? '보스' : '스테이지'} ${unlock.kind === 'clear' || unlock.kind === 'boss' ? unlock.stage : 1} 클리어로 해금">${icon('lock')}${unlock.kind === 'boss' ? 'BOSS' : 'STAGE'} ${unlock.kind === 'clear' || unlock.kind === 'boss' ? unlock.stage : 1}</button>`;
   return `<article class="char-card${owned ? '' : ' locked'}${equipped ? ' equipped' : ''}" data-rarity="${rarity}"><span class="rarity-badge">${RARITY_LABELS[rarity]}</span><img class="char-portrait" src="${robotPortraitUrl(character)}" alt=""><h3>${name}</h3>${action}</article>`;
+}
+
+const STATS: Record<StatKey, { name: string; icon: string; value: (value: number) => string; effect: (value: number) => string }> = {
+  attack: { name: '공격력', icon: 'attack', value: (value) => String(value), effect: (value) => `공격 한 번에 ${value} 피해` },
+  defense: { name: '방어력', icon: 'shield', value: (value) => `${value}%`, effect: (value) => `맞으면 하트 ${Math.round(100 - value) / 100}개 잃음` },
+  maxHp: { name: '최대 HP', icon: 'heart', value: (value) => `하트 ${value}`, effect: (value) => `하트 ${value}개로 시작` },
+};
+
+function upgradeCard(stat: StatKey) {
+  const { stats, currency } = getPlayerProgress();
+  const rule = UPGRADES[stat];
+  const info = STATS[stat];
+  const value = stats[stat];
+  const cost = upgradeCost(value, rule);
+  const change = cost === null ? `${info.value(value)} · 최대` : `${info.value(value)} → ${info.value(value + rule.step)}`;
+  const button = cost === null
+    ? '<button disabled>MAX</button>'
+    : `<button data-upgrade="${stat}" aria-label="${info.name} 강화, 코인 ${cost}개" ${currency < cost ? 'disabled' : ''}>${coin}${cost}</button>`;
+  return `<article class="boost-card upgrade-card" data-stat="${stat}"><span class="boost-icon">${icon(info.icon)}</span><h3>${info.name} <small>Lv ${upgradeLevel(value, rule)} / ${rule.costs.length}</small></h3><p>${info.effect(value)}</p><span class="boost-owned">${change}</span><div class="boost-actions">${button}</div></article>`;
+}
+
+function upgradesContent() {
+  const { currency } = getPlayerProgress();
+  return `<div class="prepare"><div class="prepare-head"><h2>영구 강화</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">코인으로 올린 능력치는 모든 스테이지에 계속 적용돼요</p><div class="boost-grid">${(Object.keys(UPGRADES) as StatKey[]).map(upgradeCard).join('')}</div></div>`;
 }
 
 function charactersContent(confirming: string) {
@@ -148,7 +174,7 @@ export class MenuScreenScene extends Phaser.Scene {
       content = `<div class="world-bar"><button data-world-step="-1" aria-label="이전 월드" ${this.world > 1 ? '' : 'disabled'}>${icon('left')}</button><h2>WORLD ${this.world} · ${WORLD_NAMES[this.world - 1]}</h2><button data-world-step="1" aria-label="다음 월드" ${this.world < worlds ? '' : 'disabled'}>${icon('right')}</button></div><div class="stage-progress"><span>${icon('flag')}해금</span><i class="progress-track"><b></b></i><strong>${unlocked} / ${STAGES.length}</strong></div><div class="stage-grid">${cards}</div>`;
     }
     if (this.screen === 'prepare') content = prepareContent(this.stageIndex, this.picked);
-    if (this.screen === 'stats') content = `<article class="menu-panel"><h2>현재 능력치</h2><dl class="stat-list"><div><dt>${icon('attack')}공격력</dt><dd>${player.stats.attack}</dd></div><div><dt>${icon('shield')}방어력</dt><dd>${player.stats.defense}%</dd></div><div><dt>${icon('heart')}HP</dt><dd>${player.stats.maxHp}</dd></div></dl><p>강화 구매는 준비 중입니다.</p></article>`;
+    if (this.screen === 'stats') content = upgradesContent();
     if (this.screen === 'characters') content = charactersContent(this.confirming);
     if (this.screen === 'inventory') {
       const owned = ITEM_IDS.filter((id) => itemCount(id) > 0);
@@ -172,6 +198,10 @@ export class MenuScreenScene extends Phaser.Scene {
         this.scene.start('GameScene', { ...this.carry, stageIndex: this.stageIndex, boosts } satisfies SceneData);
       } else if (button.dataset.action === 'stages') {
         this.scene.restart({ screen: 'stages' });
+      } else if (button.dataset.upgrade) {
+        upgradeStat(button.dataset.upgrade as StatKey);
+        root.querySelector('.menu-content')!.innerHTML = upgradesContent();
+        root.querySelector<HTMLButtonElement>(`[data-upgrade="${button.dataset.upgrade}"]`)?.focus({ preventScroll: true });
       } else if (button.dataset.worldStep) {
         this.scene.restart({ screen: 'stages', world: this.world + Number(button.dataset.worldStep) });
       } else if (button.dataset.robot || button.dataset.buyRobot) {

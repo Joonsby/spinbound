@@ -1,5 +1,6 @@
 import type { QualitySetting } from './graphics/quality';
-import { buyItem as payForItem, takeItems } from './game/economy';
+import { buyItem as payForItem, buyUpgrade, takeItems } from './game/economy';
+import { UPGRADES, type StatKey } from './game/config';
 import { CHARACTERS, DEFAULT_CHARACTER, characterById, earnedCharacters, type Character } from './characters';
 
 const QUALITY_SETTINGS: QualitySetting[] = ['auto', 'low', 'medium', 'high'];
@@ -67,6 +68,13 @@ export function addCurrency(amount: number) {
   data.currency += amount;
   savePlayerProgress(data);
   return getPlayerProgress().currency;
+}
+// Permanent stat upgrade bought in the 강화 menu; false when maxed or too expensive.
+export function upgradeStat(stat: StatKey) {
+  const data = getPlayerProgress();
+  if (!buyUpgrade(data, stat, UPGRADES[stat])) return false;
+  savePlayerProgress(data);
+  return true;
 }
 export const itemCount = (id: ItemId) => getPlayerProgress().items.filter((item) => item === id).length;
 export function buyItem(id: ItemId) {
