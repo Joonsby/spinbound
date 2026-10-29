@@ -4,6 +4,7 @@ export type PlayerProgress = {
   version: 1;
   level: number;
   currency: number;
+  // maxEnergy is unused since flight was removed; kept so older saves round-trip.
   stats: { attack: number; defense: number; maxHp: number; maxEnergy: number };
   ownedCharacters: string[];
   equippedCharacter: string;

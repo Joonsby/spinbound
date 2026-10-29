@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
+import { animationKey, frameKey, PLAYER_POSES, ROBOT_CLIPS } from './game/player-animation';
 
-export type PlayerPose = 'idle' | 'run' | 'jump' | 'fall' | 'dash' | 'hurt';
 export const THEMES = [
   { sky: 0xbce9f5, far: 0x97c9ad, near: 0x5aab83, soil: 0x8e6750, top: 0x92d968, accent: '#d5f798' },
   { sky: 0x91bec5, far: 0x587d88, near: 0x315f59, soil: 0x514f48, top: 0x70b897, accent: '#a5e5c6' },
@@ -14,15 +14,14 @@ export function createTextures(scene: Phaser.Scene) {
   const save = (key: string, width: number, height: number, draw: () => void) => {
     g.clear(); draw(); g.generateTexture(key, width, height);
   };
-  const counts: Record<PlayerPose, number> = { idle: 4, run: 8, jump: 2, fall: 2, dash: 12, hurt: 2 };
-  for (const pose of Object.keys(counts) as PlayerPose[]) {
-    const count = counts[pose];
+  for (const pose of PLAYER_POSES) {
+    const count = ROBOT_CLIPS[pose].frames;
     for (let frame = 0; frame < count; frame++) {
-      save(`robot-${pose}-${frame}`, 48, 64, () => {
+      save(frameKey('robot', pose, frame), 48, 64, () => {
         const phase = frame / count * Math.PI * 2;
         const bob = pose === 'idle' ? Math.sin(phase) : pose === 'run' ? Math.sin(phase) * 0.4 : 0;
-        const orange = pose === 'hurt' ? 0xf17b62 : 0xf9a044;
-        if (pose === 'dash') {
+        const orange = pose === 'hurt' ? 0xf17b62 : pose === 'dead' ? 0xa58f7c : 0xf9a044;
+        if (pose === 'roll') {
           // Retracted wheels and interlocking shell panels form a rolling sphere.
           g.fillStyle(0x46525b); g.fillCircle(24, 39, 21);
           g.fillStyle(0xf2f2e9); g.fillCircle(24, 39, 19);
@@ -63,8 +62,8 @@ export function createTextures(scene: Phaser.Scene) {
         g.fillStyle(orange); g.fillCircle(37, 41 + bob, 2);
         g.fillStyle(0x35434d); g.fillRoundedRect(14, 24 + bob, 25, 14, 6);
         g.fillStyle(pose === 'hurt' ? 0xff9a84 : 0xa4f2ed);
-        if (pose === 'hurt') {
-          g.lineStyle(2, 0xff9a84);
+        if (pose === 'hurt' || pose === 'dead') {
+          g.lineStyle(2, pose === 'dead' ? 0x8a99a3 : 0xff9a84);
           for (const x of [21, 32]) { g.lineBetween(x - 2, 28 + bob, x + 2, 33 + bob); g.lineBetween(x + 2, 28 + bob, x - 2, 33 + bob); }
         } else if (pose === 'idle' && frame === 3) {
           g.fillRoundedRect(18, 30 + bob, 6, 2, 1); g.fillRoundedRect(29, 30 + bob, 6, 2, 1);
@@ -78,9 +77,11 @@ export function createTextures(scene: Phaser.Scene) {
         // Small side grippers lift for take-off and open during descent.
         const armY = pose === 'jump' ? 24 : pose === 'fall' ? 38 : 34;
         g.fillStyle(0x87929a); g.fillRoundedRect(1, armY + bob, 6, 10, 3); g.fillRoundedRect(41, armY + bob, 6, 10, 3);
+        if (pose === 'dead') { g.fillStyle(0xd7dde0, 0.7 - frame * 0.3); g.fillCircle(30 + frame * 4, 6 - frame * 3, 4 + frame * 2); }
       });
     }
-    scene.anims.create({ key: `robot-${pose}`, frames: Array.from({ length: count }, (_, i) => ({ key: `robot-${pose}-${i}` })), frameRate: pose === 'idle' ? 4 : pose === 'run' ? 48 : pose === 'dash' ? 24 : 8, repeat: -1 });
+    const { frameRate, repeat } = ROBOT_CLIPS[pose];
+    scene.anims.create({ key: animationKey('robot', pose), frames: Array.from({ length: count }, (_, i) => ({ key: frameKey('robot', pose, i) })), frameRate, repeat });
   }
   for (let frame = 0; frame < 6; frame++) {
     save(`coin-${frame}`, 28, 28, () => {
@@ -143,14 +144,29 @@ export function createTextures(scene: Phaser.Scene) {
     g.fillStyle(0xffd5da); g.fillTriangle(5, 24, 18, 3, 18, 24);
     g.lineStyle(2, 0xa75070); g.lineBetween(20, 10, 28, 25);
   });
-  for (const kind of ['spring', 'boost']) save(`${kind}-art`, 66, 16, () => {
+  save('spring-art', 66, 16, () => {
+    g.fillStyle(0x334c59); g.fillRoundedRect(4, 12, 58, 4, 2);
+    g.lineStyle(3, 0xc7d3da);
+    for (let x = 12; x < 56; x += 10) { g.lineBetween(x, 12, x + 5, 5); g.lineBetween(x + 5, 5, x + 10, 12); }
+    g.fillStyle(0xffb565); g.fillRoundedRect(0, 0, 66, 6, 3);
+    g.fillStyle(0xffe2b8); g.fillRoundedRect(4, 1, 58, 2, 1);
+  });
+  save('boost-art', 66, 16, () => {
     g.fillStyle(0x334c59); g.fillRoundedRect(0, 0, 66, 16, 4);
-    g.fillStyle(kind === 'spring' ? 0xffb565 : 0x6ce2de); g.fillRoundedRect(2, 0, 62, 5, 2);
-    g.lineStyle(2, kind === 'spring' ? 0xffd9a3 : 0xb9fff2);
-    for (let x = 9; x < 60; x += 14) {
-      if (kind === 'spring') { g.lineBetween(x, 6, x + 7, 9); g.lineBetween(x + 7, 9, x, 13); }
-      else { g.lineBetween(x, 7, x + 5, 10); g.lineBetween(x + 5, 10, x, 13); }
-    }
+    g.fillStyle(0x6ce2de); g.fillRoundedRect(2, 0, 62, 4, 2);
+    g.fillStyle(0xb9fff2);
+    for (let x = 8; x < 60; x += 15) g.fillTriangle(x, 6, x + 9, 10, x, 14);
+  });
+  save('wall-art', 36, 80, () => {
+    g.fillStyle(0x6f5843); g.fillRect(0, 0, 36, 80);
+    g.fillStyle(0xb79572);
+    for (let row = 0; row < 5; row++) for (let col = -1; col < 2; col++) g.fillRoundedRect(col * 18 + (row % 2) * 9 + 2, row * 16 + 2, 15, 13, 3);
+    g.lineStyle(2, 0x3e2f24); g.lineBetween(8, 10, 18, 30); g.lineBetween(18, 30, 12, 46); g.lineBetween(18, 30, 30, 38); g.lineBetween(24, 52, 14, 70);
+    g.fillStyle(0xffe1a8, 0.8); g.fillTriangle(14, 34, 22, 40, 14, 46);
+  });
+  save('rope-anchor', 24, 24, () => {
+    g.fillStyle(0x4b5560); g.fillRoundedRect(2, 2, 20, 10, 4);
+    g.lineStyle(3, 0xc7d3da); g.strokeCircle(12, 15, 6);
   });
   save('moving-art', 110, 20, () => {
     g.fillStyle(0x655e91); g.fillRoundedRect(0, 0, 110, 20, 6);

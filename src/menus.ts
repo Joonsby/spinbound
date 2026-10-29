@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { createTextures } from './visuals';
 import { getEquippedRobot, getPlayerProgress, savePlayerProgress, ROBOTS, ITEMS } from './progress';
-import { getSoundEnabled, setSoundEnabled } from './effects';
+import { getSoundEnabled, setSoundEnabled } from './audio';
 import { STAGES } from './stages';
 import { bindAppEnvironment } from './app-environment';
 
@@ -36,7 +36,7 @@ export class MainMenuScene extends Phaser.Scene {
     createTextures(this);
     const player = getPlayerProgress();
     const robot = getEquippedRobot();
-    mount(this, 'SPROUT HOP · 메인 로비', `<article class="robot-card">${robotImage(this)}<h2>${robot.name}</h2><p>레벨 ${player.level} · 보유 재화 ${player.currency}</p></article><div class="menu-grid"><button data-screen="stages" class="menu-primary">게임 시작</button><button data-screen="stats">강화</button><button data-screen="characters">캐릭터</button><button data-screen="inventory">보관함</button><button data-screen="settings">설정</button></div>`, (button) => {
+    mount(this, 'SPINBOUND · 메인 로비', `<article class="robot-card">${robotImage(this)}<h2>${robot.name}</h2><p>레벨 ${player.level} · 보유 재화 ${player.currency}</p></article><div class="menu-grid"><button data-screen="stages" class="menu-primary">게임 시작</button><button data-screen="stats">강화</button><button data-screen="characters">캐릭터</button><button data-screen="inventory">보관함</button><button data-screen="settings">설정</button></div>`, (button) => {
       const screen = button.dataset.screen;
       if (screen) this.scene.start('MenuScreenScene', { screen });
     });
@@ -53,7 +53,7 @@ export class MenuScreenScene extends Phaser.Scene {
     const titles: Record<Screen, string> = { stages: '스테이지 선택', stats: '강화 · 능력치', characters: '보유 로봇', inventory: '보관함', settings: '설정' };
     let content = '';
     if (this.screen === 'stages') content = `<div class="stage-grid">${STAGES.map((stage, index) => `<button data-stage="${index}" ${index + 1 > player.unlockedStage ? 'disabled' : ''}>Stage ${index + 1}<small>${index + 1 > player.unlockedStage ? '잠김' : stage.name}</small></button>`).join('')}</div>`;
-    if (this.screen === 'stats') content = `<article class="menu-panel"><h2>현재 능력치</h2><dl class="stat-list"><dt>공격력</dt><dd>${player.stats.attack}</dd><dt>방어력</dt><dd>${player.stats.defense}%</dd><dt>HP</dt><dd>${player.stats.maxHp}</dd><dt>에너지</dt><dd>${player.stats.maxEnergy}</dd></dl><p>강화 구매는 준비 중입니다.</p></article>`;
+    if (this.screen === 'stats') content = `<article class="menu-panel"><h2>현재 능력치</h2><dl class="stat-list"><dt>공격력</dt><dd>${player.stats.attack}</dd><dt>방어력</dt><dd>${player.stats.defense}%</dd><dt>HP</dt><dd>${player.stats.maxHp}</dd></dl><p>강화 구매는 준비 중입니다.</p></article>`;
     if (this.screen === 'characters') content = `<div class="menu-grid">${ROBOTS.filter((robot) => player.ownedCharacters.includes(robot.id)).map((robot) => `<article class="robot-card">${robotImage(this, robot.id)}<h2>${robot.name}</h2><button data-robot="${robot.id}" ${player.equippedCharacter === robot.id ? 'disabled' : ''}>${player.equippedCharacter === robot.id ? '장착 중' : '선택'}</button></article>`).join('')}</div>`;
     if (this.screen === 'inventory') content = `<article class="menu-panel"><h2>보유 아이템 ${player.items.length}개</h2>${player.items.length ? `<ul>${player.items.map((id) => `<li>${ITEMS[id]}</li>`).join('')}</ul>` : '<p>보유한 아이템이 없습니다.</p>'}</article>`;
     if (this.screen === 'settings') content = `<article class="menu-panel"><h2>사운드</h2><button data-action="sound" aria-pressed="${getSoundEnabled()}">사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}</button></article>`;

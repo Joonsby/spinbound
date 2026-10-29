@@ -4,16 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#234c48" />
-    <title>Sprout Hop</title>
+    <title>Spinbound</title>
   </head>
   <body data-screen="menu">
     <main id="game" aria-label="횡스크롤 액션 게임"></main>
-    <header><span>SPROUT HOP <small id="stage-label">STAGE 1 / 10</small></span><div class="header-actions"><button id="sound-toggle" type="button" aria-label="사운드 끄기" aria-pressed="true">♪ ON</button><button id="restart" type="button">↻ 재시작</button><button id="lobby" type="button">로비</button><button id="boss-test" type="button" title="Stage 3 보스전 테스트">보스</button></div></header>
-    <div id="scoreboard" aria-label="현재 기록"><span>점수 <strong id="score">0</strong></span><span>코인 <strong id="coin-count">0</strong></span><span>HP <strong id="hp">3 / 3</strong></span><span class="combat-hud"><strong id="mode-state">기동모드</strong> · 에너지 <strong id="energy">100</strong> / <span id="max-energy">100</span></span></div>
-    <p id="status" role="status">← → / A D 이동 · Space 점프 · Tab 모드 전환 · 공격모드에서 점프 유지: 비행</p>
+    <header><span>SPINBOUND <small id="stage-label">STAGE 1 / 10</small></span><div class="header-actions"><button id="sound-toggle" type="button" aria-label="사운드 끄기" aria-pressed="true">♪ ON</button><button id="restart" type="button">↻ 재시작</button><button id="lobby" type="button">로비</button><button id="boss-test" type="button" title="Stage 3 보스전 테스트">보스</button></div></header>
+    <div id="scoreboard" aria-label="현재 기록"><span>점수 <strong id="score">0</strong></span><span>코인 <strong id="coin-count">0</strong></span><span>HP <strong id="hp">3 / 3</strong></span><span id="speed-hud" class="speed-hud">SPEED <i class="speed-meter"><b></b></i> <strong>SPIN</strong></span></div>
+    <p id="status" role="status">← → / A D 이동 · Space / ↑ 점프 · 빠르게 달리면 자동 구르기</p>
     <nav aria-label="게임 조작">
       <div><button data-control="left" aria-label="왼쪽 이동">◀</button><button data-control="right" aria-label="오른쪽 이동">▶</button></div>
-      <div class="actions"><button data-control="mode" aria-label="공격모드로 전환" aria-pressed="false">기동모드</button><button data-control="jump" aria-label="점프, 공격모드에서 공중 유지 시 비행">점프</button></div>
+      <div class="actions"><button data-control="jump" aria-label="점프, 길게 누르면 더 높이">점프</button></div>
     </nav>
     <section id="result" role="dialog" aria-modal="true" aria-labelledby="result-title" hidden>
       <div class="result-card">

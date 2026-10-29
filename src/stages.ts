@@ -1,6 +1,7 @@
 export type EnemyKind = 'patrol' | 'fly' | 'charger';
+export type PadKind = 'spring' | 'spring-left' | 'spring-right' | 'boost';
 
-type StageData = {
+export type StageData = {
   theme: 0 | 1 | 2;
   name: string;
   width: number;
@@ -14,124 +15,116 @@ type StageData = {
   rewards?: { x: number; y: number; score: number }[];
   sections?: { x: number; title: string; hint: string }[];
   signs?: { x: number; y: number; text: string }[];
+  // Pendulum ropes: anchor point and rope length.
+  ropes?: { x: number; y: number; length: number }[];
+  // Optional walls that only a fast roll breaks; never on the only route.
+  walls?: { x: number; y: number; width?: number; height?: number }[];
   platforms: [number, number, number, number][];
   coins: [number, number][];
   spikes: number[];
   enemies: [number, number][];
-  pads: [number, 'spring' | 'boost', number?][];
-  movingPlatforms: { x: number; y: number; axis: 'x' | 'y'; min: number; max: number }[];
+  pads: [number, PadKind, number?][];
+  movingPlatforms: { x: number; y: number; axis: 'x' | 'y'; min: number; max: number; speed?: number }[];
 };
 
-// Stage 1: ~130 seconds at normal running speed, with optional combat/exploration.
-// The lower trail always reconnects; upper routes are one-way platforms.
+export const GROUND_TOP = 480;
+
+function groundRuns(stage: StageData, runs: [number, number][]) {
+  // Short terrain chunks keep procedural tile textures within mobile GPU limits.
+  for (const [from, to] of runs) {
+    for (let left = from; left < to; left += 1000) {
+      const width = Math.min(1000, to - left);
+      stage.platforms.push([left + width / 2, GROUND_TOP + 60, width, 120]);
+    }
+  }
+}
+function coinLine(stage: StageData, from: number, to: number, y: number, spacing: number) {
+  for (let x = from; x <= to; x += spacing) stage.coins.push([x, y]);
+}
+function coinArc(stage: StageData, centerX: number, y: number, width: number, height: number, count: number) {
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    stage.coins.push([Math.round(centerX - width / 2 + width * t), Math.round(y - Math.sin(t * Math.PI) * height)]);
+  }
+}
+
+// Stage 1 teaches one idea per section, in order:
+// move/jump → spring → booster roll → roll attack → stomp → moving platform → rope → breakable wall → all together.
+// A checkpoint sits before every pit so a fall never replays more than one section.
 const STAGE_ONE: StageData = {
-  theme: 0, name: '새벽 초원의 대모험', width: 36000, goalY: 480,
-  checkpoint: { x: 11400, y: 510 },
-  checkpoints: [{ x: 5800, y: 510 }, { x: 11400, y: 510 }, { x: 17600, y: 510 }, { x: 24400, y: 510 }, { x: 31400, y: 510 }],
-  platforms: [], oneWayPlatforms: [
-    // Early skirmishes alternate with short runways and optional escape ledges.
-    [1100, 385, 180, 18], [1840, 380, 220, 18], [3150, 390, 180, 18],
-    // First chain: booster on lower trail → jump onto spring → upper expressway.
-    [5400, 443, 260, 18], [5700, 355, 220, 18], [6070, 255, 420, 18],
-    [6650, 255, 560, 18], [7370, 285, 600, 18], [8130, 315, 600, 18],
-    [8850, 345, 520, 18], [9510, 375, 520, 18], [10170, 405, 520, 18],
-    // Battle terraces sit well above the uninterrupted sprint lane.
-    [11900, 443, 240, 18], [12320, 355, 320, 18], [12900, 355, 520, 18],
-    [13600, 385, 600, 18], [14400, 335, 600, 18], [15200, 385, 600, 18],
-    [16000, 425, 500, 18],
-    // Exploration: staircase to an upper grove; lower route is shorter to learn.
-    [18300, 443, 280, 18], [18700, 345, 280, 18], [19100, 245, 300, 18],
-    [19600, 165, 380, 18], [20200, 165, 400, 18], [20750, 245, 380, 18],
-    [21300, 335, 450, 18], [21950, 405, 450, 18], [22900, 443, 400, 18],
-    // Second chain, then a broad upper road for uninterrupted high-speed travel.
-    [25300, 443, 280, 18], [25800, 285, 420, 18], [26450, 285, 600, 18],
-    [27300, 285, 900, 18], [28400, 315, 900, 18], [29500, 355, 900, 18],
-    [30500, 415, 500, 18],
-    // Final optional arena and return to the wide finish straight.
-    [32200, 443, 280, 18], [32650, 350, 400, 18], [33350, 350, 600, 18],
-    [34100, 390, 600, 18], [34700, 443, 320, 18],
+  theme: 0, name: '새벽 초원의 대모험', width: 12000,
+  checkpoint: { x: 4700, y: 450 },
+  checkpoints: [{ x: 4700, y: 450 }, { x: 5950, y: 450 }, { x: 7050, y: 450 }, { x: 10000, y: 450 }],
+  platforms: [
+    [1950, 450, 500, 300],
+    // Roof of the hidden tunnel; both tunnel ends are breakable walls.
+    [8750, 385, 400, 30],
   ],
-  coins: [], spikes: [], enemies: [],
+  oneWayPlatforms: [[800, 395, 180, 18], [4950, 380, 220, 18], [10560, 280, 300, 18]],
+  coins: [], spikes: [620, 1000], enemies: [],
   enemyDetails: [
-    { kind: 'patrol', x: 540, y: 462, min: 500, max: 650 },
-    { kind: 'fly', x: 1050, y: 350, min: 960, max: 1190 },
-    { kind: 'patrol', x: 1540, y: 462, min: 1450, max: 1650 },
-    { kind: 'charger', x: 2110, y: 462, min: 1950, max: 2260 },
-    { kind: 'fly', x: 2890, y: 370, min: 2780, max: 3010 },
-    { kind: 'patrol', x: 3440, y: 462, min: 3320, max: 3560 },
-    { kind: 'patrol', x: 4210, y: 522, min: 4120, max: 4320 },
-    { kind: 'charger', x: 4720, y: 522, min: 4580, max: 4820 },
-    { kind: 'patrol', x: 12400, y: 328, min: 12220, max: 12420 },
-    { kind: 'patrol', x: 12900, y: 328, min: 12700, max: 13100 },
-    { kind: 'fly', x: 13600, y: 270, min: 13350, max: 13800 },
-    { kind: 'charger', x: 14500, y: 308, min: 14200, max: 14600 },
-    { kind: 'patrol', x: 15200, y: 358, min: 15000, max: 15400 },
-    { kind: 'fly', x: 20900, y: 170, min: 20630, max: 21000 },
-    { kind: 'patrol', x: 22000, y: 378, min: 21800, max: 22100 },
-    { kind: 'charger', x: 33450, y: 323, min: 33150, max: 33550 },
-    { kind: 'fly', x: 34100, y: 270, min: 33900, max: 34300 },
-    { kind: 'patrol', x: 34650, y: 416, min: 34600, max: 34780 },
+    { kind: 'patrol', x: 3420, y: 462, min: 3340, max: 3500 },
+    { kind: 'patrol', x: 4120, y: 462, min: 4060, max: 4200 },
+    { kind: 'patrol', x: 4360, y: 462, min: 4300, max: 4440 },
+    { kind: 'patrol', x: 4980, y: 462, min: 4880, max: 5080 },
+    { kind: 'fly', x: 5350, y: 390, min: 5250, max: 5450 },
+    { kind: 'fly', x: 5700, y: 390, min: 5600, max: 5800 },
+    { kind: 'patrol', x: 9610, y: 462, min: 9560, max: 9660 },
+    { kind: 'patrol', x: 9810, y: 462, min: 9760, max: 9860 },
+    { kind: 'charger', x: 11400, y: 462, min: 11250, max: 11600 },
   ],
-  // Traps are restricted to optional ledges, never the boost runways.
-  traps: [[13680, 361], [21400, 311], [34180, 366]],
-  pads: [
-    [850, 'boost', 488], [2500, 'boost', 488], [3800, 'boost', 488],
-    [4980, 'boost', 548], [5400, 'spring', 426],
-    [7600, 'boost', 284], [9100, 'boost', 548],
-    [18300, 'spring', 426], [22850, 'spring', 426],
-    [24900, 'boost', 548], [25300, 'spring', 426],
-    [27000, 'boost', 284], [28300, 'boost', 314], [29700, 'boost', 354],
-    [31600, 'boost', 548], [35000, 'boost', 548],
-  ],
-  movingPlatforms: [
-    { x: 7050, y: 330, axis: 'y', min: 275, max: 445 },
-    { x: 16900, y: 430, axis: 'x', min: 16600, max: 17200 },
-    { x: 22450, y: 350, axis: 'y', min: 230, max: 445 },
-    { x: 26100, y: 360, axis: 'y', min: 290, max: 445 },
-  ],
-  rewards: [{ x: 19600, y: 120, score: 1000 }, { x: 20200, y: 120, score: 1000 }, { x: 22900, y: 400, score: 500 }, { x: 33350, y: 300, score: 500 }],
+  pads: [[1500, 'spring'], [2650, 'boost'], [3800, 'boost'], [8250, 'boost'], [9420, 'boost'], [10200, 'spring-right']],
+  // Flush with the floor and docking at both edges, so boarding is a matter of timing, not a precise jump.
+  movingPlatforms: [{ x: 6150, y: 490, axis: 'x', min: 6150, max: 6550, speed: 110 }],
+  ropes: [{ x: 7520, y: 130, length: 230 }, { x: 10820, y: 120, length: 230 }],
+  walls: [{ x: 8568, y: 440 }, { x: 8932, y: 440 }],
+  rewards: [{ x: 2120, y: 250, score: 500 }, { x: 8750, y: 440, score: 1000 }, { x: 10640, y: 240, score: 500 }],
   sections: [
-    { x: 0, title: '01 · 첫 교전', hint: '전방에 순찰 로봇! 공격모드 자동 사격 또는 기동모드 접촉 공격' },
-    { x: 850, title: '01 · 짧은 질주와 비행', hint: '부스터로 가속! 비행 적은 점프·날기로 높이를 맞춰 공략' },
-    { x: 1900, title: '01 · 돌진 예고', hint: '주황색 예고를 보고 점프! 상단 발판으로 우회할 수도 있어요' },
-    { x: 3100, title: '01 · 전투와 재가속', hint: '다음 적의 HP를 확인하며 모드를 바꿔 보세요' },
-    { x: 4600, title: '02 · 연쇄 도약', hint: '청록 부스터 → 점프 → 주황 스프링 · 아래쪽은 안전한 우회로' },
-    { x: 11200, title: '03 · 전투 테라스', hint: '상단의 적은 위에서 밟기 · 주황색 점멸 뒤 돌진에 주의' },
-    { x: 17400, title: '04 · 숨겨진 정원', hint: '계단과 스프링을 따라 위로 탐험하면 보너스 별!' },
-    { x: 24200, title: '05 · 하늘 고속도로', hint: '상단은 빠른 길, 하단은 안전한 길 · 두 길은 다시 만나요' },
-    { x: 31200, title: '06 · 마지막 질주', hint: '선택 전투로 보너스 획득, 넓은 하단 길로 깃발까지!' },
+    { x: 0, title: '01 · 첫걸음', hint: '← → 이동 · 점프로 가시 넘기 · 멈추지 않고 달리면 탄력이 붙어요' },
+    { x: 1300, title: '02 · 스프링', hint: '주황 스프링을 밟으면 점프보다 훨씬 높이 튀어요' },
+    { x: 2450, title: '03 · 부스터와 구르기', hint: '청록 부스터로 빨라지면 자동으로 공처럼 굴러요' },
+    { x: 3200, title: '04 · 구르기 공격', hint: '구르는 중 적과 부딪히면 처치! 걷다가 닿으면 피해' },
+    { x: 4700, title: '05 · 밟기 공격', hint: '적 위로 떨어지면 밟기 · 점프를 누르고 있으면 더 높이 튀어요' },
+    { x: 5900, title: '06 · 움직이는 발판', hint: '발판이 가장자리에 붙을 때 올라타 구덩이를 건너요' },
+    { x: 7000, title: '07 · 줄 매달리기', hint: '점프해서 줄에 닿으면 자동으로 잡아요 · 점프로 놓기' },
+    { x: 8100, title: '08 · 부서지는 벽', hint: '구르면서 금 간 벽에 부딪히면 숨겨진 길이 열려요' },
+    { x: 9300, title: '09 · 종합 질주', hint: '부스터 → 구르기 → 대각 스프링 → 줄 → 깃발까지!' },
   ],
   signs: [
-    { x: 320, y: 360, text: '첫 교전! 공격모드 / 기동모드' },
-    { x: 1930, y: 360, text: '돌진 예고 확인 · 점프로 회피' },
-    { x: 5000, y: 400, text: '점프 ↑ 스프링→→→' },
-    { x: 11250, y: 380, text: '↑ 전투 +200 / 아래 안전 우회 →' },
-    { x: 17750, y: 380, text: '↑ 숨겨진 정원 · 보너스 별' },
-    { x: 24500, y: 390, text: '↑ 빠른 상단 경로 / → 안전한 하단 경로' },
-    { x: 31600, y: 380, text: '↑ 마지막 선택 전투 / → GOAL' },
+    { x: 300, y: 380, text: '← → 이동 · 점프로 가시 넘기' },
+    { x: 1380, y: 380, text: '스프링 ↑ 높이 점프' },
+    { x: 2520, y: 380, text: '부스터 » 빨라지면 자동 구르기' },
+    { x: 3200, y: 380, text: '구르며 부딪히면 적 처치' },
+    { x: 4520, y: 380, text: '쭉 달리면 탄력이 붙어 굴러요' },
+    { x: 5160, y: 330, text: '위에서 떨어지면 밟기 공격' },
+    { x: 6000, y: 300, text: '발판을 타고 건너기' },
+    { x: 7150, y: 300, text: '점프 → 줄 잡기 → 점프로 놓기' },
+    { x: 8130, y: 380, text: '구르기로 금 간 벽 부수기' },
+    { x: 11150, y: 380, text: '돌진이 끝난 직후가 기회!' },
   ],
 };
-// Short terrain chunks keep procedural tile textures within mobile GPU limits.
-for (let left = 0; left < STAGE_ONE.width; left += 1000) {
-  const width = Math.min(1000, STAGE_ONE.width - left);
-  const top = left < 4000 ? 480 : 540;
-  STAGE_ONE.platforms.push([left + width / 2, top + 60, width, 120]);
-}
-function coinTrail(start: number, end: number, y: number, spacing = 180) {
-  for (let x = start; x <= end; x += spacing) STAGE_ONE.coins.push([x, y]);
-}
-coinTrail(300, 3750, 440, 220);
-coinTrail(4350, 10800, 500, 250);
-coinTrail(6000, 6800, 215, 160); coinTrail(7200, 7500, 245, 150);
-coinTrail(8000, 8300, 275, 150); coinTrail(9300, 9700, 335, 160);
-coinTrail(11700, 17000, 500, 300);
-coinTrail(12250, 13050, 315, 160); coinTrail(14200, 14600, 295, 160);
-coinTrail(18000, 23900, 500, 280);
-coinTrail(19000, 19200, 205, 100); coinTrail(19480, 20340, 125, 110);
-coinTrail(24600, 31000, 500, 280);
-coinTrail(25700, 27800, 245, 180); coinTrail(28000, 28800, 275, 180);
-coinTrail(29200, 29900, 315, 180); coinTrail(31700, 35600, 500, 240);
-coinTrail(32600, 33500, 310, 150);
+groundRuns(STAGE_ONE, [[0, 1700], [2200, 6100], [6600, 7300], [7750, 10600], [11050, 12000]]);
+coinLine(STAGE_ONE, 200, 520, 440, 80);
+coinArc(STAGE_ONE, 620, 420, 110, 50, 3);
+coinLine(STAGE_ONE, 740, 860, 360, 60);
+coinArc(STAGE_ONE, 1000, 420, 110, 50, 3);
+coinLine(STAGE_ONE, 1100, 1400, 440, 100);
+STAGE_ONE.coins.push([1560, 330], [1640, 260]);
+coinLine(STAGE_ONE, 1760, 2080, 270, 64);
+coinLine(STAGE_ONE, 2750, 3200, 440, 90);
+coinLine(STAGE_ONE, 3560, 3760, 440, 100);
+coinLine(STAGE_ONE, 4500, 4640, 440, 70);
+coinArc(STAGE_ONE, 5350, 340, 120, 30, 3);
+coinArc(STAGE_ONE, 5700, 335, 120, 30, 3);
+coinLine(STAGE_ONE, 6220, 6500, 380, 70);
+STAGE_ONE.coins.push([7420, 320], [7610, 330], [7690, 300]);
+coinLine(STAGE_ONE, 8600, 8900, 340, 60);
+coinLine(STAGE_ONE, 8620, 8700, 440, 40);
+coinLine(STAGE_ONE, 8800, 8880, 440, 40);
+coinLine(STAGE_ONE, 9500, 9900, 440, 100);
+coinLine(STAGE_ONE, 10450, 10690, 245, 60);
+STAGE_ONE.coins.push([10900, 310], [10980, 290]);
+coinLine(STAGE_ONE, 11150, 11750, 440, 100);
 
 export const STAGES: StageData[] = [
   STAGE_ONE,
@@ -152,15 +145,21 @@ export const STAGES: StageData[] = [
   {
     theme: 2, name: '가속 돌파 · 기계 보스', width: 4400, checkpoint: { x: 1690, y: 450 },
     checkpoints: [{ x: 1690, y: 450 }, { x: 3020, y: 450 }],
-    boss: { entry: 3080, left: 3000, right: 4400, x: 4180, y: 420 },
+    boss: { entry: 3080, left: 3000, right: 4400, x: 4250, y: 432 },
     platforms: [
-      [360, 550, 720, 140], [1170, 550, 580, 140], [1880, 550, 520, 140], [3350, 550, 2100, 140],
+      [360, 550, 720, 140], [1170, 550, 580, 140], [1880, 550, 520, 140], [3350, 600, 2100, 240],
       [420, 382, 120, 18], [620, 300, 100, 18], [1080, 378, 130, 18], [1330, 300, 110, 18], [1840, 370, 140, 18], [2510, 380, 160, 18],
     ],
     coins: [[230, 445], [330, 445], [420, 345], [620, 265], [790, 375], [950, 435], [1080, 340], [1190, 430], [1330, 265], [1530, 375], [1690, 435], [1840, 335], [1950, 415], [2220, 375], [2380, 435], [2510, 345], [2640, 435], [2880, 435], [2990, 435], [3220, 410]],
     spikes: [560, 1010, 1270, 1780, 2010, 2460, 2740],
     enemies: [[300, 490], [1060, 1200], [1850, 1950], [2830, 2970]],
-    pads: [[260, 'spring'], [1390, 'boost'], [2380, 'spring'], [2640, 'boost']],
+    // Arena boosters on both sides keep a roll reachable wherever the boss stops. No arena spring:
+    // running over one mid-fight launched the player into the next charge.
+    pads: [[260, 'spring'], [1390, 'boost'], [2380, 'spring'], [2640, 'boost'], [3250, 'boost'], [4150, 'boost']],
+    sections: [
+      { x: 0, title: '03 · 가속 돌파', hint: '스프링과 부스터로 속도를 붙여 굴러서 돌파하세요' },
+      { x: 2950, title: '보스 · FORGE-06', hint: '예고를 보고 피한 뒤 약점이 열리면 구르기·밟기!' },
+    ],
     movingPlatforms: [
       { x: 790, y: 420, axis: 'x', min: 735, max: 845 },
       { x: 2220, y: 420, axis: 'y', min: 320, max: 450 },
