@@ -85,6 +85,15 @@ for (const [index, stage] of STAGES.entries()) {
   });
 }
 
+test('boss arena has boosters on both halves so a roll is always reachable', () => {
+  for (const stage of STAGES) {
+    if (!stage.boss) continue;
+    const { left, right } = stage.boss;
+    const middle = (left + right) / 2;
+    const boosts = stage.pads.filter(([x, kind]) => kind === 'boost' && x > left && x < right);
+    assert.ok(boosts.some(([x]) => x < middle) && boosts.some(([x]) => x > middle));
+  }
+});
 
 test('stage 1 is a short session: at most ~12k px with checkpoints every ≤ 3k px', () => {
   const stage = STAGES[0];

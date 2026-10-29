@@ -51,7 +51,7 @@ function robotImage(scene: Phaser.Scene, id = getEquippedRobot().id) {
 function stageCard(stage: StageData, index: number, unlocked: number) {
   const status = index + 1 > unlocked ? 'locked' : index + 1 < unlocked ? 'cleared' : 'current';
   const label = status === 'locked' ? `${icon('lock')}잠김` : status === 'cleared' ? `${icon('check')}클리어` : '도전!';
-  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span></span><span class="stage-name">${status === 'locked' ? '? ? ?' : stage.name}</span><span class="stage-status">${label}</span></button>`;
+  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${stage.boss ? '<span class="stage-boss">BOSS</span>' : ''}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : stage.name}</span><span class="stage-status">${label}</span></button>`;
 }
 
 // Thumbnail colours come from the stage themes (set through CSSOM, no inline style markup).

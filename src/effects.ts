@@ -150,6 +150,14 @@ export class GameEffects {
     this.burst(x, y, color, 8, 170);
   }
 
+  // Boss weak point: larger, layered hit.
+  bigImpact(x: number, y: number) {
+    this.flash(x, y, VFX.hitCore, 1.6);
+    this.ring(x, y, VFX.hitCore, 1.4);
+    this.ring(x, y, 0xffffff, 0.9);
+    this.burst(x, y, VFX.hitCore, 12, 230);
+  }
+
   dust(x: number, y: number, direction: number, time: number) {
     if (!this.ready('dust', time, 85)) return;
     this.spawn(x - direction * 10, y, { texture: 'fx-puff', vx: -direction * 40, vy: -18, life: 0.38, size: 0.55, grow: 1.4, drag: 2.2, tint: VFX.dust, fade: 0.8 });

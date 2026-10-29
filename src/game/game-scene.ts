@@ -30,6 +30,7 @@ import { PadSystem } from './mechanics/pads';
 import { MovingPlatforms } from './mechanics/moving-platforms';
 import { SwingRope } from './mechanics/swing-rope';
 import { BreakableWalls } from './mechanics/breakable-walls';
+import { MachineBoss, type BossRecoil } from './boss';
 import { installDebugHooks } from './debug';
 
 const START = { x: 90, y: 440 };
@@ -80,6 +81,7 @@ export class GameScene extends Phaser.Scene {
   private pads!: PadSystem;
   private platforms!: MovingPlatforms;
   private ropes: SwingRope[] = [];
+  private boss?: MachineBoss;
   private theme!: StageTheme;
 
   init(data: SceneData = {}) {
@@ -100,6 +102,7 @@ export class GameScene extends Phaser.Scene {
     this.hitStopUntil = 0;
     this.resultTimer = undefined;
     this.ropes = [];
+    this.boss = undefined;
   }
 
   create() {
@@ -146,6 +149,7 @@ export class GameScene extends Phaser.Scene {
     ];
     this.enemies = new EnemySystem(this, enemyConfigs, this.stageIndex === 0);
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
+    if (stage.boss) this.createBoss(stage);
 
     this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width);
     this.cameraControl.follow(spawn.x, spawn.y);
@@ -170,6 +174,7 @@ export class GameScene extends Phaser.Scene {
       this.controls.destroy();
       this.audio.destroy();
       this.effects.destroy();
+      this.boss?.destroy();
       this.hud.nextButton.onclick = null;
       for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
       this.hud.hideResult();
@@ -293,7 +298,39 @@ export class GameScene extends Phaser.Scene {
     this.add.image(goalX, goalFloor + 2, PROP_KEYS.goal).setOrigin(0.5, 1).setDepth(DEPTH.prop).setScale(1 / artScale(PROP_KEYS.goal));
     const goal = this.add.rectangle(goalX, goalY, 44, 120, 0x60dfb1, 0);
     this.physics.add.existing(goal, true);
-    this.physics.add.overlap(this.player.sprite, goal, () => this.endStage(true));
+    this.physics.add.overlap(this.player.sprite, goal, () => {
+      if (!this.boss || this.boss.defeated) this.endStage(true);
+    });
+    if (stage.boss) this.addSign(goalX - 10, goalFloor - 190, '보스를 처치하면 클리어');
+  }
+
+  private createBoss(stage: StageData) {
+    this.boss = new MachineBoss(this, stage.boss!, this.player.sprite, this.effects, {
+      contact: (body) => classifyContact(this.player.contactBox(), this.player.rolling, this.toBox(body), RULES),
+      hurt: (x) => { this.takeHit(x); },
+      recoil: (x, kind) => this.bossRecoil(x, kind),
+      struck: (x, y) => {
+        this.audio.play('boss-hit');
+        this.effects.bigImpact(x, y);
+        this.cameras.main.shake(110, 0.005);
+        this.hitStop(COMBAT.bossHitStopMs);
+      },
+      minionDown: (x, y) => {
+        this.enemyScore += COMBAT.enemyScore;
+        this.updateScore();
+        this.audio.play('enemy');
+        this.effects.impact(x, y, 0x94dcca);
+        this.effects.popup(x, y - 26, `+${COMBAT.enemyScore}`);
+      },
+      defeated: (x, y) => {
+        this.enemyScore += COMBAT.bossScore;
+        this.updateScore(); this.audio.play('enemy'); this.effects.bigImpact(x, y); this.effects.popup(x, y - 60, `+${COMBAT.bossScore}`);
+        this.endStage(true);
+      },
+      damagePerHit: this.playerStats.attack,
+      frameArena: (left, right, ground) => this.cameraControl.frameArena(left, right, ground),
+      releaseCamera: () => this.cameraControl.release(this.player.x, this.player.y),
+    });
   }
 
   private bindButtons() {
@@ -343,6 +380,17 @@ export class GameScene extends Phaser.Scene {
       this.enemyScore += COMBAT.enemyScore;
       this.updateScore();
       this.hitStop(COMBAT.hitStopMs);
+    }
+  }
+
+  private bossRecoil(x: number, kind: BossRecoil) {
+    const now = this.time.now;
+    if (kind === 'stomp' || kind === 'clang-top') this.player.stompBounce(now, this.frameInput.jumpHeld);
+    else if (kind === 'push') this.player.recoil(now, x, 180, 160);
+    else this.player.recoil(now, x, 260, 260);
+    if (kind === 'clang' || kind === 'clang-top') {
+      this.audio.play('clang');
+      this.effects.burst(this.player.x + (x > this.player.x ? 16 : -16), this.player.y, 0xfff0c8, 8, 150);
     }
   }
 
@@ -407,6 +455,7 @@ export class GameScene extends Phaser.Scene {
     if (this.finished) return;
     const now = this.time.now;
     this.deaths += 1;
+    this.boss?.reset();
     this.detachRopes();
     this.ropes.forEach((rope) => rope.reset());
     this.resetInput();
@@ -415,6 +464,7 @@ export class GameScene extends Phaser.Scene {
     this.rig.reset();
     this.wasRolling = false;
     this.effects.clear();
+    this.cameraControl.release(spawn.x, spawn.y);
     this.cameraControl.snap(spawn.x, spawn.y, 1);
     this.hud.setStatus(`${this.checkpointActive ? '체크포인트' : '시작 지점'}에서 부활 · ${this.deaths}회`);
   }
@@ -449,6 +499,8 @@ export class GameScene extends Phaser.Scene {
 
   private endStage(cleared: boolean) {
     if (this.finished) return;
+    if (!cleared) this.boss?.reset();
+    this.boss?.halt();
     this.finished = true;
     this.hitStopUntil = 0;
     this.resetInput();
@@ -502,6 +554,7 @@ export class GameScene extends Phaser.Scene {
       rope.update(now, delta, player, rope.held ? input.direction : 0);
       if (!rope.held && rope.tryGrab(player, now)) { this.audio.play('grab'); this.rig.event('grab'); }
     }
+    this.boss?.update(now);
     this.platforms.update();
     this.pads.update();
     const view = this.cameras.main.worldView;
@@ -592,6 +645,7 @@ export class GameScene extends Phaser.Scene {
       enemiesAlive: this.enemies.list.filter((enemy) => enemy.sprite.active).length,
       enemies: this.enemies.list.filter((enemy) => enemy.sprite.active)
         .map((enemy) => ({ kind: enemy.kind, x: Math.round(enemy.body.center.x), y: Math.round(enemy.body.center.y), hp: enemy.hp, state: enemy.state })),
+      boss: this.boss?.snapshot,
     };
   }
 }

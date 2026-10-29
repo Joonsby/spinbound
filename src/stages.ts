@@ -8,6 +8,7 @@ export type StageData = {
   checkpoint: { x: number; y: number };
   checkpoints?: { x: number; y: number }[];
   goalY?: number;
+  boss?: { entry: number; left: number; right: number; x: number; y: number };
   oneWayPlatforms?: [number, number, number, number][];
   enemyDetails?: { kind: EnemyKind; x: number; y: number; min: number; max: number }[];
   traps?: [number, number][];
@@ -142,19 +143,22 @@ export const STAGES: StageData[] = [
     ],
   },
   {
-    theme: 2, name: '가속 돌파 · 마지막 질주', width: 4400, checkpoint: { x: 1690, y: 450 },
+    theme: 2, name: '가속 돌파 · 기계 보스', width: 4400, checkpoint: { x: 1690, y: 450 },
     checkpoints: [{ x: 1690, y: 450 }, { x: 3020, y: 450 }],
+    boss: { entry: 3080, left: 3000, right: 4400, x: 4250, y: 432 },
     platforms: [
       [360, 550, 720, 140], [1170, 550, 580, 140], [1880, 550, 520, 140], [3350, 600, 2100, 240],
       [420, 382, 120, 18], [620, 300, 100, 18], [1080, 378, 130, 18], [1330, 300, 110, 18], [1840, 370, 140, 18], [2510, 380, 160, 18],
     ],
-    coins: [[230, 445], [330, 445], [420, 345], [620, 265], [790, 375], [950, 435], [1080, 340], [1190, 430], [1330, 265], [1530, 375], [1690, 435], [1840, 335], [1950, 415], [2220, 375], [2380, 435], [2510, 345], [2640, 435], [2880, 435], [2990, 435], [3220, 410], [3420, 435], [3560, 400], [3700, 435], [3860, 435], [4000, 400], [4140, 435]],
+    coins: [[230, 445], [330, 445], [420, 345], [620, 265], [790, 375], [950, 435], [1080, 340], [1190, 430], [1330, 265], [1530, 375], [1690, 435], [1840, 335], [1950, 415], [2220, 375], [2380, 435], [2510, 345], [2640, 435], [2880, 435], [2990, 435], [3220, 410]],
     spikes: [560, 1010, 1270, 1780, 2010, 2460, 2740],
     enemies: [[300, 490], [1060, 1200], [1850, 1950], [2830, 2970]],
+    // Arena boosters on both sides keep a roll reachable wherever the boss stops. No arena spring:
+    // running over one mid-fight launched the player into the next charge.
     pads: [[260, 'spring'], [1390, 'boost'], [2380, 'spring'], [2640, 'boost'], [3250, 'boost'], [4150, 'boost']],
     sections: [
       { x: 0, title: '03 · 가속 돌파', hint: '스프링과 부스터로 속도를 붙여 굴러서 돌파하세요' },
-      { x: 2950, title: '03 · 마지막 질주', hint: '부스터로 속도를 올려 골까지 굴러가세요' },
+      { x: 2950, title: '보스 · FORGE-06', hint: '예고를 보고 피한 뒤 약점이 열리면 구르기·밟기!' },
     ],
     movingPlatforms: [
       { x: 790, y: 420, axis: 'x', min: 735, max: 845 },
