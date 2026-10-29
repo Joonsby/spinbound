@@ -27,6 +27,11 @@ export const PHYSICS = {
   // Auto-roll hysteresis.
   rollEnterSpeed: 320,
   rollExitSpeed: 260,
+  // Spin dash: double-tap a direction on the ground. Below sprintSpeed, so it never reaches farther than a full run.
+  dashSpeed: 340,
+  dashMs: 450,
+  dashCooldownMs: 900,
+  doubleTapMs: 260,
   maxStepMs: 50,
 };
 export type MovementTuning = typeof PHYSICS;

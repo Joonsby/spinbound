@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COMBAT, PHYSICS } from './config';
-import { applyBoost, createJumpState, createRunState, cutJump, nextRolling, noteGrounded, pressJump, resetRun, stepRun, tryJump } from './movement';
+import { applyBoost, createDashState, createJumpState, createRunState, cutJump, dashDirection, nextRolling, noteGrounded, pressJump, resetRun, stepRun, tryDash, tryJump } from './movement';
 import { createContactBox } from './contact';
 import type { InputFrame } from './input';
 
@@ -13,7 +13,7 @@ const MAX_SPEED_X = 480;
 // Physics body; the drawn robot (RobotRig) is sized independently.
 export const PLAYER_BODY = { width: 30, height: 42 };
 export type PlayerPose = 'idle' | 'run' | 'jump' | 'fall' | 'roll' | 'hurt' | 'dead';
-export type PlayerFrame = { jumped: boolean; landed: boolean; landingSpeed: number };
+export type PlayerFrame = { jumped: boolean; landed: boolean; landingSpeed: number; dashed: boolean };
 
 // Player physics state. Rendering lives in PlayerAnimator; HP and score live in the scene.
 export class Player {
@@ -21,6 +21,7 @@ export class Player {
   readonly body: Phaser.Physics.Arcade.Body;
   readonly run = createRunState();
   readonly jump = createJumpState();
+  readonly dash = createDashState();
   rolling = false;
   // Set while a rope drives the position instead of physics.
   held = false;
@@ -35,7 +36,7 @@ export class Player {
   private wasGrounded = false;
   private lastVy = 0;
   private box = createContactBox();
-  private frame: PlayerFrame = { jumped: false, landed: false, landingSpeed: 0 };
+  private frame: PlayerFrame = { jumped: false, landed: false, landingSpeed: 0, dashed: false };
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.sprite = scene.add.rectangle(x, y, PLAYER_BODY.width, PLAYER_BODY.height, 0x69b9ff, 0).setDepth(2);
@@ -64,7 +65,7 @@ export class Player {
   // `carryVx` is the moving platform under the player; part of it is kept on take-off.
   update(now: number, deltaMs: number, input: InputFrame, carryVx: number): PlayerFrame {
     const { body, frame } = this;
-    frame.jumped = false; frame.landed = false;
+    frame.jumped = false; frame.landed = false; frame.dashed = false;
     if (this.dead || this.held) return frame;
     const grounded = this.isGrounded(now);
     if (grounded && !this.wasGrounded) { frame.landed = true; frame.landingSpeed = this.lastVy; }
@@ -72,10 +73,12 @@ export class Player {
     if (grounded) noteGrounded(this.jump, now);
     if (input.jumpPressed) pressJump(this.jump, now);
     if (now >= this.controlLockUntil) {
-      if (input.direction !== 0) this.facing = input.direction;
       // Read back what physics did last step (walls, recoils) before integrating input.
       this.run.vx = body.velocity.x;
-      body.setVelocityX(stepRun(PHYSICS, this.run, input.direction, grounded, this.isBoosted(now), deltaMs));
+      if (input.dash !== 0 && tryDash(PHYSICS, this.dash, this.run, input.dash, grounded, now) !== undefined) frame.dashed = true;
+      const direction = dashDirection(this.dash, input.direction, now);
+      if (direction !== 0) this.facing = direction;
+      body.setVelocityX(stepRun(PHYSICS, this.run, direction, grounded, this.isBoosted(now), deltaMs));
       const jumpVy = tryJump(PHYSICS, this.jump, now);
       if (jumpVy !== undefined) {
         this.groundLockUntil = now + GROUND_LOCK_MS;
@@ -125,6 +128,7 @@ export class Player {
   recoil(now: number, sourceX: number, speed = COMBAT.recoilSpeed, lift = COMBAT.recoilLift) {
     const direction = this.x < sourceX ? -1 : 1;
     this.rolling = false;
+    this.dash.until = -Infinity;
     resetRun(this.run);
     this.controlLockUntil = now + RECOIL_LOCK_MS;
     this.launch(now, direction * speed, -lift);
@@ -134,6 +138,7 @@ export class Player {
     const direction = this.x < sourceX ? -1 : 1;
     this.rolling = false;
     this.boostUntil = 0;
+    this.dash.until = -Infinity;
     this.hurtUntil = this.controlLockUntil = now + COMBAT.knockbackMs;
     resetRun(this.run);
     this.launch(now, direction * COMBAT.knockbackSpeed, -COMBAT.knockbackLift);
@@ -155,6 +160,7 @@ export class Player {
     this.jump.lastGroundedAt = this.jump.jumpPressedAt = -Infinity;
     this.jump.cuttable = false;
     this.boostUntil = this.hurtUntil = this.controlLockUntil = this.groundLockUntil = 0;
+    this.dash.until = this.dash.readyAt = -Infinity;
     this.invulnerableUntil = now + COMBAT.invulnerableMs;
     this.wasGrounded = false; this.lastVy = 0; this.platformContactAt = -Infinity;
   }
@@ -162,6 +168,7 @@ export class Player {
   stop() {
     resetRun(this.run);
     this.rolling = false;
+    this.dash.until = -Infinity;
     this.body.setVelocity(0, 0);
   }
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PHYSICS } from '../src/game/config.ts';
-import { applyBoost, createJumpState, createRunState, cutJump, nextRolling, noteGrounded, pressJump, stepRun, tryJump } from '../src/game/movement.ts';
+import { applyBoost, createDashState, createJumpState, createRunState, createTapState, cutJump, dashDirection, nextRolling, noteGrounded, pressJump, registerTap, stepRun, tryDash, tryJump } from '../src/game/movement.ts';
 
 const FRAME = 1000 / 60;
 
@@ -141,4 +141,35 @@ test('variable jump: a tap is clearly lower than a held jump, springs are never 
   assert.ok(full > 130 && full < 165, `full ${full.toFixed(1)}`);
   assert.ok(tap < full * 0.7, `tap ${tap.toFixed(1)} vs full ${full.toFixed(1)}`);
   assert.equal(apex(1, false), full);
+});
+
+test('a double tap of one direction asks for a spin dash; slow taps or a turn do not', () => {
+  const taps = createTapState();
+  assert.equal(registerTap(PHYSICS, taps, 1, 1000), false);
+  assert.equal(registerTap(PHYSICS, taps, 1, 1000 + PHYSICS.doubleTapMs - 10), true);
+  assert.equal(registerTap(PHYSICS, taps, 1, 1300), false, 'a third tap starts a new pair');
+  assert.equal(registerTap(PHYSICS, taps, -1, 1350), false, 'other direction');
+  assert.equal(registerTap(PHYSICS, taps, -1, 1350 + PHYSICS.doubleTapMs + 1), false, 'too slow');
+});
+
+test('a spin dash from standing starts a roll, carries without the button and has a cooldown', () => {
+  const run = createRunState();
+  const dash = createDashState();
+  assert.equal(tryDash(PHYSICS, dash, run, 1, false, 0), undefined, 'ground only');
+  const vx = tryDash(PHYSICS, dash, run, 1, true, 0);
+  assert.equal(vx, PHYSICS.dashSpeed);
+  assert.ok(nextRolling(PHYSICS, { rolling: false, grounded: true, speed: Math.abs(vx!), blocked: false }));
+  assert.ok(PHYSICS.dashSpeed < PHYSICS.sprintSpeed, 'never farther than a full sprint');
+
+  // Button released right after the double tap: still rolling forward until the dash ends.
+  let rolling = true;
+  for (let t = FRAME; t < PHYSICS.dashMs; t += FRAME) {
+    stepRun(PHYSICS, run, dashDirection(dash, 0, t), true, false, FRAME);
+    rolling = nextRolling(PHYSICS, { rolling, grounded: true, speed: Math.abs(run.vx), blocked: false });
+  }
+  assert.ok(rolling && run.vx > 0);
+  assert.equal(dashDirection(dash, 0, PHYSICS.dashMs + 1), 0, 'dash over');
+  assert.equal(tryDash(PHYSICS, dash, run, 1, true, PHYSICS.dashCooldownMs - 1), undefined, 'cooling down');
+  assert.notEqual(tryDash(PHYSICS, dash, run, -1, true, PHYSICS.dashCooldownMs), undefined);
+  assert.equal(dashDirection(dash, 1, PHYSICS.dashCooldownMs + FRAME), 1, 'pressing the other way ends the dash');
 });

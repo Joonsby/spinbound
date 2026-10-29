@@ -1,17 +1,21 @@
 import Phaser from 'phaser';
-import type { Direction } from './movement';
+import { PHYSICS } from './config';
+import { createTapState, registerTap, type Direction } from './movement';
 
 export type Control = 'left' | 'right' | 'jump';
-export type InputFrame = { direction: Direction; jumpPressed: boolean; jumpHeld: boolean };
+// `dash` is the direction of a double tap seen this frame (0 when none).
+export type InputFrame = { direction: Direction; jumpPressed: boolean; jumpHeld: boolean; dash: Direction };
 
 // Touch buttons and keyboard merged into one per-frame snapshot. Owned by a scene.
 export class InputController {
   private pointers: Record<Control, Set<number>> = { left: new Set(), right: new Set(), jump: new Set() };
   private buttons = new Map<Control, HTMLButtonElement>();
   private jumpEdges = 0;
+  private directionEdges: (-1 | 1)[] = [];
+  private taps = createTapState();
   private keys: Record<'LEFT' | 'RIGHT' | 'UP' | 'A' | 'D' | 'W' | 'SPACE', Phaser.Input.Keyboard.Key>;
   private cleanup: (() => void)[] = [];
-  private frame: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false };
+  private frame: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
 
   constructor(private scene: Phaser.Scene) {
     document.querySelectorAll<HTMLButtonElement>('[data-control]').forEach((button) => {
@@ -54,6 +58,7 @@ export class InputController {
 
   press(control: Control, pointerId: number) {
     if (control === 'jump' && this.pointers.jump.size === 0) this.jumpEdges += 1;
+    if (control !== 'jump' && this.pointers[control].size === 0) this.directionEdges.push(control === 'left' ? -1 : 1);
     this.pointers[control].add(pointerId);
     this.buttons.get(control)?.classList.add('pressed');
   }
@@ -63,12 +68,19 @@ export class InputController {
     if (!this.pointers[control].size) this.buttons.get(control)?.classList.remove('pressed');
   }
 
-  poll(): InputFrame {
+  poll(now: number): InputFrame {
     const { keys } = this;
     // Evaluate every JustDown: it consumes the edge, so short-circuiting would replay it next frame.
     const up = Phaser.Input.Keyboard.JustDown(keys.UP);
     const w = Phaser.Input.Keyboard.JustDown(keys.W);
     const space = Phaser.Input.Keyboard.JustDown(keys.SPACE);
+    const leftTap = [Phaser.Input.Keyboard.JustDown(keys.LEFT), Phaser.Input.Keyboard.JustDown(keys.A)].some(Boolean);
+    const rightTap = [Phaser.Input.Keyboard.JustDown(keys.RIGHT), Phaser.Input.Keyboard.JustDown(keys.D)].some(Boolean);
+    if (leftTap) this.directionEdges.push(-1);
+    if (rightTap) this.directionEdges.push(1);
+    this.frame.dash = 0;
+    for (const direction of this.directionEdges) if (registerTap(PHYSICS, this.taps, direction, now)) this.frame.dash = direction;
+    this.directionEdges.length = 0;
     const left = keys.LEFT.isDown || keys.A.isDown || this.pointers.left.size > 0;
     const right = keys.RIGHT.isDown || keys.D.isDown || this.pointers.right.size > 0;
     this.frame.direction = (Number(right) - Number(left)) as Direction;
@@ -82,6 +94,8 @@ export class InputController {
     for (const pointers of Object.values(this.pointers)) pointers.clear();
     for (const button of this.buttons.values()) button.classList.remove('pressed');
     this.jumpEdges = 0;
+    this.directionEdges.length = 0;
+    this.taps = createTapState();
     this.scene.input.keyboard?.resetKeys();
   }
 

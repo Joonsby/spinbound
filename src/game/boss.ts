@@ -178,7 +178,7 @@ export class MachineBoss {
       this.state = 'intro'; this.deadline = now + 1400;
       this.enable(this.actor, this.config.x, this.config.y);
       this.hud.hidden = false; document.body.classList.add('boss-fight');
-      this.refreshHud(); this.label.setText('보스전 시작 · 약점이 열리면 구르기·밟기!');
+      this.refreshHud(); this.label.setText('보스전 시작 · 약점이 열리면 스핀 대시·밟기!');
       this.hooks.frameArena(this.config.left, this.config.right, this.ground);
     }
     if (!this.active) return;
@@ -308,6 +308,7 @@ export class MachineBoss {
     this.scene.cameras.main.shake(120, 0.004);
     this.effects.debris(this.actor.body.center.x + this.direction * BODY.width / 2, this.ground - 30, 0xd8c3a5, 8);
     this.expose();
+    this.label.setText('벽에 부딪혀 기절! 스핀 대시로 공격');
   }
 
   private expose() {
@@ -315,7 +316,7 @@ export class MachineBoss {
     this.deadline = this.scene.time.now + BOSS.exposedMs[this.phase - 1];
     this.core.setVisible(true);
     this.actor.visual?.setTint(0xfff1c8);
-    this.label.setText('약점 노출! 구르기·밟기로 공격');
+    this.label.setText('약점 노출! 스핀 대시·밟기로 공격');
   }
 
   private tick() {

@@ -74,6 +74,46 @@ export function applyBoost(t: MovementTuning, run: RunState, direction: -1 | 1) 
   return run.vx;
 }
 
+export type TapState = { direction: Direction; at: number };
+export type DashState = { direction: Direction; until: number; readyAt: number };
+
+export function createTapState(): TapState {
+  return { direction: 0, at: -Infinity };
+}
+
+export function createDashState(): DashState {
+  return { direction: 0, until: -Infinity, readyAt: -Infinity };
+}
+
+// Two presses of the same direction within doubleTapMs ask for a spin dash; a third press starts a new pair.
+export function registerTap(t: MovementTuning, taps: TapState, direction: -1 | 1, now: number) {
+  const dash = taps.direction === direction && now - taps.at <= t.doubleTapMs;
+  taps.direction = dash ? 0 : direction;
+  taps.at = now;
+  return dash;
+}
+
+// Spin dash from the ground: launches straight into a roll and fills sprint momentum, so holding
+// the direction afterwards keeps rolling like a full sprint. Returns the new vx, or undefined.
+export function tryDash(t: MovementTuning, dash: DashState, run: RunState, direction: -1 | 1, grounded: boolean, now: number) {
+  if (!grounded || now < dash.readyAt) return undefined;
+  dash.direction = direction;
+  dash.until = now + t.dashMs;
+  dash.readyAt = now + t.dashCooldownMs;
+  const kept = Math.sign(run.vx) === direction ? Math.abs(run.vx) : 0;
+  run.vx = direction * Math.max(kept, t.dashSpeed);
+  run.sprint = t.sprintSpeed - t.runSpeed;
+  run.sprintHeldMs = t.sprintDelayMs;
+  return run.vx;
+}
+
+// During a dash a released button still moves in the dash direction; pressing the other way ends it.
+export function dashDirection(dash: DashState, input: Direction, now: number): Direction {
+  if (now >= dash.until) return input;
+  if (input !== 0 && input !== dash.direction) { dash.until = -Infinity; return input; }
+  return dash.direction;
+}
+
 export function noteGrounded(jump: JumpState, now: number) {
   jump.lastGroundedAt = now;
 }

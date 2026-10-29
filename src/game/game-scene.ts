@@ -63,7 +63,7 @@ export class GameScene extends Phaser.Scene {
   private currentSection = -1;
   private hitStopUntil = 0;
   private resultTimer?: Phaser.Time.TimerEvent;
-  private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false };
+  private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
   private targetBox = createContactBox();
   private hud!: Hud;
   private controls!: InputController;
@@ -123,7 +123,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(theme.sky[0]);
     document.body.dataset.theme = String(stage.theme);
     this.hud.setStage(this.stageIndex, STAGES.length);
-    this.hud.setStatus(`${stage.name} · ← → 이동 · 점프 · 빠르게 달리면 자동 구르기`);
+    this.hud.setStatus(`${stage.name} · ← → 이동 · 점프 · 두 번 톡톡 스핀 대시`);
     this.physics.resume();
     this.physics.world.setBounds(0, -200, stage.width, 1100);
     const { solid, oneWay } = this.buildTerrain(stage);
@@ -431,7 +431,7 @@ export class GameScene extends Phaser.Scene {
 
   private resetInput() {
     this.controls?.reset();
-    this.frameInput.direction = 0;
+    this.frameInput.direction = this.frameInput.dash = 0;
     this.frameInput.jumpHeld = this.frameInput.jumpPressed = false;
   }
 
@@ -534,7 +534,7 @@ export class GameScene extends Phaser.Scene {
       this.hitStopUntil = 0;
       this.physics.world.resume();
     }
-    const input = this.frameInput = this.controls.poll();
+    const input = this.frameInput = this.controls.poll(now);
     const player = this.player;
     const heldRope = this.ropes.find((rope) => rope.held);
     if (heldRope && input.jumpPressed && heldRope.canRelease(now)) {
@@ -545,6 +545,7 @@ export class GameScene extends Phaser.Scene {
     }
     const step = player.update(now, delta, input, this.platforms.carryVx());
     if (step.jumped) { this.audio.play('jump'); this.rig.event('jump'); this.effects.jump(player.x, player.body.bottom); }
+    if (step.dashed) { this.audio.play('boost'); this.effects.boostEntry(player.x, player.y); }
     if (step.landed) {
       this.rig.event('land', Phaser.Math.Clamp(step.landingSpeed / 650, 0.35, 1.3));
       if (step.landingSpeed > 100) this.audio.play('land');
