@@ -139,12 +139,10 @@ export function cutJump(t: MovementTuning, jump: JumpState, vy: number, held: bo
   return Math.max(vy, -t.jumpCutSpeed);
 }
 
-export type RollCheck = { rolling: boolean; grounded: boolean; speed: number; blocked: boolean };
+export type RollCheck = { rolling: boolean; speed: number; blocked: boolean; timeLeft: number };
 
-// Hysteresis: enter only on the ground above rollEnterSpeed, leave below rollExitSpeed.
-// A roll that leaves the ground stays a spin attack in the air; a plain jump never becomes one.
+// A roll never starts here (boosters and spin dashes start it); it ends when its time runs out,
+// when it slows below rollExitSpeed or on a hit. A roll that leaves the ground stays a spin attack.
 export function nextRolling(t: MovementTuning, check: RollCheck) {
-  if (check.blocked) return false;
-  if (check.rolling) return check.speed >= t.rollExitSpeed;
-  return check.grounded && check.speed >= t.rollEnterSpeed;
+  return check.rolling && !check.blocked && check.timeLeft > 0 && check.speed >= t.rollExitSpeed;
 }

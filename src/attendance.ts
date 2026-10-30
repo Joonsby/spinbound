@@ -11,7 +11,7 @@ export const ATTENDANCE_WEEK: AttendanceReward[] = [
   reward(200, [], '200', 'coin'),
   reward(0, ['shield'], '보호막', 'shield'),
   reward(300, [], '300', 'coin'),
-  reward(0, ['magnet', 'extra-heart'], '자석·체력', 'magnet'),
+  reward(0, ['magnet', 'extra-heart'], '자석 체력', 'magnet'),
   reward(500, [], '500', 'coin'),
   reward(0, ['shield', 'extra-heart', 'magnet'], '아이템 3종', 'box'),
   reward(1000, [], '1000', 'coin'),

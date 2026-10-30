@@ -28,6 +28,7 @@ export class Player {
   dead = false;
   facing: -1 | 1 = 1;
   boostUntil = 0;
+  rollUntil = 0;
   hurtUntil = 0;
   controlLockUntil = 0;
   invulnerableUntil = 0;
@@ -75,7 +76,10 @@ export class Player {
     if (now >= this.controlLockUntil) {
       // Read back what physics did last step (walls, recoils) before integrating input.
       this.run.vx = body.velocity.x;
-      if (input.dash !== 0 && tryDash(PHYSICS, this.dash, this.run, input.dash, grounded, now) !== undefined) frame.dashed = true;
+      if (input.dash !== 0 && tryDash(PHYSICS, this.dash, this.run, input.dash, grounded, now) !== undefined) {
+        frame.dashed = true;
+        this.startRoll(now, PHYSICS.dashMs);
+      }
       const direction = dashDirection(this.dash, input.direction, now);
       if (direction !== 0) this.facing = direction;
       body.setVelocityX(stepRun(PHYSICS, this.run, direction, grounded, this.isBoosted(now), deltaMs));
@@ -89,7 +93,7 @@ export class Player {
       } else body.setVelocityY(cutJump(PHYSICS, this.jump, body.velocity.y, input.jumpHeld));
     }
     this.rolling = nextRolling(PHYSICS, {
-      rolling: this.rolling, grounded: grounded && !frame.jumped, speed: Math.abs(body.velocity.x), blocked: this.isHurt(now),
+      rolling: this.rolling, speed: Math.abs(body.velocity.x), blocked: this.isHurt(now), timeLeft: this.rollUntil - now,
     });
     this.lastVy = body.velocity.y;
     return frame;
@@ -108,6 +112,12 @@ export class Player {
     const direction = Math.abs(this.body.velocity.x) > 20 ? Math.sign(this.body.velocity.x) as -1 | 1 : this.facing;
     this.boostUntil = now + PHYSICS.boostMs;
     this.body.setVelocityX(applyBoost(PHYSICS, this.run, direction));
+    this.startRoll(now, PHYSICS.rollMs);
+  }
+
+  private startRoll(now: number, ms: number) {
+    this.rolling = true;
+    this.rollUntil = Math.max(this.rollUntil, now + ms);
   }
 
   // Springs, rope releases and stomps: an impulse that a released jump button must not cut.
@@ -159,7 +169,7 @@ export class Player {
     resetRun(this.run);
     this.jump.lastGroundedAt = this.jump.jumpPressedAt = -Infinity;
     this.jump.cuttable = false;
-    this.boostUntil = this.hurtUntil = this.controlLockUntil = this.groundLockUntil = 0;
+    this.boostUntil = this.rollUntil = this.hurtUntil = this.controlLockUntil = this.groundLockUntil = 0;
     this.dash.until = this.dash.readyAt = -Infinity;
     this.invulnerableUntil = now + COMBAT.invulnerableMs;
     this.wasGrounded = false; this.lastVy = 0; this.platformContactAt = -Infinity;

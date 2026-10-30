@@ -110,7 +110,6 @@ export class Hud {
   private shownDanger: number | undefined;
 
   constructor() {
-    this.speedHud.style.setProperty('--roll-mark', String(PHYSICS.rollEnterSpeed / PHYSICS.boostSpeed));
     this.pauseSettings.onclick = () => this.togglePauseSettings(this.pausePanel.hidden);
   }
 

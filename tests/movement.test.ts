@@ -5,11 +5,11 @@ import { applyBoost, createDashState, createJumpState, createRunState, createTap
 
 const FRAME = 1000 / 60;
 
-// Runs the ground loop like Player.update does and records when the roll toggles.
-function simulate(frames: number, input: (frame: number) => -1 | 0 | 1, options: { boostedUntil?: number; startVx?: number; grounded?: boolean } = {}) {
+// Runs the ground loop like Player.update does; `rollMs` > 0 starts a roll on the first frame like a booster.
+function simulate(frames: number, input: (frame: number) => -1 | 0 | 1, options: { boostedUntil?: number; startVx?: number; grounded?: boolean; rollMs?: number } = {}) {
   const run = createRunState();
   run.vx = options.startVx ?? 0;
-  let rolling = false;
+  let rolling = (options.rollMs ?? 0) > 0;
   let x = 0;
   const toggles: { frame: number; rolling: boolean; vx: number; x: number }[] = [];
   const speeds: number[] = [];
@@ -17,7 +17,7 @@ function simulate(frames: number, input: (frame: number) => -1 | 0 | 1, options:
     const boosted = frame * FRAME < (options.boostedUntil ?? -1);
     stepRun(PHYSICS, run, input(frame), options.grounded ?? true, boosted, FRAME);
     x += run.vx * FRAME / 1000;
-    const next = nextRolling(PHYSICS, { rolling, grounded: options.grounded ?? true, speed: Math.abs(run.vx), blocked: false });
+    const next = nextRolling(PHYSICS, { rolling, speed: Math.abs(run.vx), blocked: false, timeLeft: (options.rollMs ?? 0) - (frame + 1) * FRAME });
     if (next !== rolling) toggles.push({ frame, rolling: next, vx: run.vx, x });
     rolling = next;
     speeds.push(run.vx);
@@ -25,57 +25,41 @@ function simulate(frames: number, input: (frame: number) => -1 | 0 | 1, options:
   return { run, rolling, toggles, speeds, x };
 }
 
-test('plain running reaches run speed quickly but does not roll at once', () => {
+test('plain running reaches run speed quickly and never starts a roll', () => {
   const result = simulate(18, () => 1);
   assert.ok(result.run.vx >= PHYSICS.runSpeed - 1, `vx ${result.run.vx}`);
   assert.equal(result.rolling, false);
 });
 
-test('holding one direction builds momentum into an automatic roll', () => {
-  const result = simulate(180, () => 1);
-  assert.equal(result.toggles.length, 1);
-  const enter = result.toggles[0];
-  assert.equal(enter.rolling, true);
-  const seconds = enter.frame * FRAME / 1000;
-  assert.ok(seconds > 1.4 && seconds < 2.4, `rolled after ${seconds.toFixed(2)}s`);
-  assert.ok(enter.x > 380 && enter.x < 700, `rolled after ${enter.x.toFixed(0)}px`);
-  assert.ok(result.run.vx <= PHYSICS.sprintSpeed + 1e-9);
+test('holding one direction sprints faster but speed alone never rolls', () => {
+  const result = simulate(600, () => 1);
+  assert.equal(result.toggles.length, 0);
+  assert.equal(result.rolling, false);
+  assert.ok(Math.abs(result.run.vx - PHYSICS.sprintSpeed) < 1, `vx ${result.run.vx}`);
 });
 
-test('releasing input decelerates smoothly and leaves the roll exactly once', () => {
-  const result = simulate(300, (frame) => (frame < 150 ? 1 : 0));
-  assert.deepEqual(result.toggles.map((toggle) => toggle.rolling), [true, false]);
-  assert.ok(result.toggles[1].vx < PHYSICS.rollExitSpeed && result.toggles[1].vx > PHYSICS.rollExitSpeed - 20);
-  for (let i = 151; i < result.speeds.length; i++) {
-    assert.ok(result.speeds[i - 1] - result.speeds[i] <= PHYSICS.groundDecel * FRAME / 1000 + 1e-9, 'no instant stop');
-  }
-  assert.equal(result.run.vx, 0);
-});
-
-test('speeds between the exit and enter thresholds never toggle the roll', () => {
-  for (const startRolling of [true, false]) {
-    let rolling = startRolling;
-    for (let frame = 0; frame < 120; frame++) {
-      const speed = 290 + Math.sin(frame / 3) * 25;
-      rolling = nextRolling(PHYSICS, { rolling, grounded: true, speed, blocked: false });
-      assert.equal(rolling, startRolling);
-    }
-  }
-});
-
-test('a booster launches into a roll that survives the boost while the direction is held', () => {
+test('a booster roll lasts rollMs and then the robot runs normally while still holding the direction', () => {
   const run = createRunState();
   run.vx = 150;
   applyBoost(PHYSICS, run, 1);
   assert.equal(run.vx, PHYSICS.boostLaunch);
-  let rolling = nextRolling(PHYSICS, { rolling: false, grounded: true, speed: run.vx, blocked: false });
-  assert.equal(rolling, true);
-  for (let frame = 0; frame < 240; frame++) {
-    stepRun(PHYSICS, run, 1, true, frame * FRAME < PHYSICS.boostMs, FRAME);
-    rolling = nextRolling(PHYSICS, { rolling, grounded: true, speed: Math.abs(run.vx), blocked: false });
-    assert.equal(rolling, true, `frame ${frame} vx ${run.vx}`);
+  const result = simulate(300, () => 1, { startVx: run.vx, boostedUntil: PHYSICS.boostMs, rollMs: PHYSICS.rollMs });
+  assert.deepEqual(result.toggles.map((toggle) => toggle.rolling), [false]);
+  const seconds = (result.toggles[0].frame + 1) * FRAME / 1000;
+  assert.ok(Math.abs(seconds - PHYSICS.rollMs / 1000) < 0.02, `rolled for ${seconds.toFixed(2)}s`);
+  assert.ok(result.run.vx > PHYSICS.runSpeed, 'keeps its momentum after the roll');
+});
+
+test('releasing input during a booster roll leaves it early, once, and decelerates smoothly', () => {
+  const result = simulate(300, (frame) => (frame < 30 ? 1 : 0), { startVx: PHYSICS.boostLaunch, boostedUntil: PHYSICS.boostMs, rollMs: PHYSICS.rollMs });
+  assert.deepEqual(result.toggles.map((toggle) => toggle.rolling), [false]);
+  assert.ok(result.toggles[0].frame * FRAME < PHYSICS.rollMs, 'before the roll time runs out');
+  assert.ok(result.toggles[0].vx < PHYSICS.rollExitSpeed && result.toggles[0].vx > PHYSICS.rollExitSpeed - 20);
+  for (let i = 31; i < result.speeds.length; i++) {
+    if (i * FRAME < PHYSICS.boostMs) continue;
+    assert.ok(result.speeds[i - 1] - result.speeds[i] <= Math.max(PHYSICS.groundDecel, PHYSICS.overspeedDrag) * FRAME / 1000 + 1e-9, 'no instant stop');
   }
-  assert.ok(Math.abs(run.vx - PHYSICS.sprintSpeed) < 1);
+  assert.equal(result.run.vx, 0);
 });
 
 test('turning around skids through zero instead of flipping velocity', () => {
@@ -87,11 +71,12 @@ test('turning around skids through zero instead of flipping velocity', () => {
   assert.ok(result.speeds.at(-1)! < -PHYSICS.runSpeed + 1);
 });
 
-test('air speed alone never turns a plain jump into a spin attack', () => {
-  assert.equal(nextRolling(PHYSICS, { rolling: false, grounded: false, speed: PHYSICS.boostSpeed, blocked: false }), false);
-  assert.equal(nextRolling(PHYSICS, { rolling: true, grounded: false, speed: PHYSICS.rollExitSpeed + 1, blocked: false }), true);
-  assert.equal(nextRolling(PHYSICS, { rolling: true, grounded: false, speed: PHYSICS.rollExitSpeed - 1, blocked: false }), false);
-  assert.equal(nextRolling(PHYSICS, { rolling: true, grounded: true, speed: PHYSICS.boostSpeed, blocked: true }), false);
+test('nothing but an active roll keeps rolling: no start from speed, a hit or used-up time ends it', () => {
+  assert.equal(nextRolling(PHYSICS, { rolling: false, speed: PHYSICS.boostSpeed, blocked: false, timeLeft: PHYSICS.rollMs }), false);
+  assert.equal(nextRolling(PHYSICS, { rolling: true, speed: PHYSICS.rollExitSpeed + 1, blocked: false, timeLeft: 1 }), true);
+  assert.equal(nextRolling(PHYSICS, { rolling: true, speed: PHYSICS.rollExitSpeed - 1, blocked: false, timeLeft: PHYSICS.rollMs }), false);
+  assert.equal(nextRolling(PHYSICS, { rolling: true, speed: PHYSICS.boostSpeed, blocked: true, timeLeft: PHYSICS.rollMs }), false);
+  assert.equal(nextRolling(PHYSICS, { rolling: true, speed: PHYSICS.boostSpeed, blocked: false, timeLeft: 0 }), false);
 });
 
 test('jump buffer accepts an early press only within the window', () => {
@@ -152,22 +137,24 @@ test('a double tap of one direction asks for a spin dash; slow taps or a turn do
   assert.equal(registerTap(PHYSICS, taps, -1, 1350 + PHYSICS.doubleTapMs + 1), false, 'too slow');
 });
 
-test('a spin dash from standing starts a roll, carries without the button and has a cooldown', () => {
+test('a spin dash rolls for the dash only, carries without the button and has a cooldown', () => {
   const run = createRunState();
   const dash = createDashState();
   assert.equal(tryDash(PHYSICS, dash, run, 1, false, 0), undefined, 'ground only');
   const vx = tryDash(PHYSICS, dash, run, 1, true, 0);
   assert.equal(vx, PHYSICS.dashSpeed);
-  assert.ok(nextRolling(PHYSICS, { rolling: false, grounded: true, speed: Math.abs(vx!), blocked: false }));
   assert.ok(PHYSICS.dashSpeed < PHYSICS.sprintSpeed, 'never farther than a full sprint');
+  assert.ok(PHYSICS.dashSpeed >= PHYSICS.rollExitSpeed, 'fast enough to smash walls and enemies');
 
   // Button released right after the double tap: still rolling forward until the dash ends.
   let rolling = true;
-  for (let t = FRAME; t < PHYSICS.dashMs; t += FRAME) {
+  let t = FRAME;
+  for (; t < PHYSICS.dashMs; t += FRAME) {
     stepRun(PHYSICS, run, dashDirection(dash, 0, t), true, false, FRAME);
-    rolling = nextRolling(PHYSICS, { rolling, grounded: true, speed: Math.abs(run.vx), blocked: false });
+    rolling = nextRolling(PHYSICS, { rolling, speed: Math.abs(run.vx), blocked: false, timeLeft: PHYSICS.dashMs - t });
   }
   assert.ok(rolling && run.vx > 0);
+  assert.equal(nextRolling(PHYSICS, { rolling, speed: PHYSICS.dashSpeed, blocked: false, timeLeft: PHYSICS.dashMs - t }), false, 'the roll ends with the dash');
   assert.equal(dashDirection(dash, 0, PHYSICS.dashMs + 1), 0, 'dash over');
   assert.equal(tryDash(PHYSICS, dash, run, 1, true, PHYSICS.dashCooldownMs - 1), undefined, 'cooling down');
   assert.notEqual(tryDash(PHYSICS, dash, run, -1, true, PHYSICS.dashCooldownMs), undefined);

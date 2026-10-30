@@ -6,8 +6,9 @@ import { claimAttendance, getPlayerProgress, ITEMS } from './progress';
 
 const icon = (name: string) => `<i class="icon icon-${name}" aria-hidden="true"></i>`;
 const rewardIcon = (name: string) => name === 'coin' ? '<i class="coin-icon" aria-hidden="true"></i>' : icon(name);
+const burst = `<i class="claim-burst" aria-hidden="true">${Array.from({ length: 8 }, (_, i) => `<b style="--i:${i}"></b>`).join('')}</i>`;
 
-// Weekly attendance card over the lobby. onClose gets whether a reward was claimed.
+// Weekly attendance card over the lobby: today's cell is the claim button. onClose gets whether a reward was claimed.
 export function openAttendance(onClose: (claimed: boolean) => void) {
   const overlay = document.createElement('div');
   overlay.className = 'attendance-overlay';
@@ -26,8 +27,10 @@ export function openAttendance(onClose: (claimed: boolean) => void) {
     const done = open ? attendance.days % 7 : (attendance.days - 1) % 7 + 1;
     const days = ATTENDANCE_WEEK.map((reward, index) => {
       const state = index < done ? 'claimed' : index === done && open ? 'today' : 'later';
-      const fresh = claimed && index === done - 1 ? ' data-fresh' : '';
-      return `<li class="day-cell" data-state="${state}"${fresh}><span class="day-label">DAY ${index + 1}</span>${rewardIcon(reward.icon)}<strong>${reward.label}</strong></li>`;
+      const fresh = claimed && index === done - 1;
+      const claim = state === 'today' ? `<button type="button" class="day-claim" aria-label="DAY ${index + 1} 보상 받기"><span>받기</span></button>` : '';
+      const effect = fresh ? `${burst}<span class="claim-float" aria-hidden="true">+${reward.coins || reward.label}</span>` : '';
+      return `<li class="day-cell" data-state="${state}"${fresh ? ' data-fresh' : ''}><span class="day-label">DAY ${index + 1}</span>${rewardIcon(reward.icon)}<strong>${reward.label}</strong>${claim}${effect}</li>`;
     }).join('');
     const milestones = ATTENDANCE_MILESTONES.map((total) => {
       const robot = CHARACTERS.find(({ unlock }) => unlock.kind === 'attendance' && unlock.days === total);
@@ -37,9 +40,8 @@ export function openAttendance(onClose: (claimed: boolean) => void) {
     card.innerHTML = `<i class="result-badge" aria-hidden="true"></i><h1>출석 체크</h1><p class="attendance-total">총 ${attendance.days}일 출석</p>`
       + `<ul class="attendance-days">${days}</ul>`
       + `<p class="attendance-note">${note || '누적 출석 보상'}</p><ul class="attendance-milestones">${milestones}</ul>`
-      + `<button type="button" class="attendance-claim" ${open ? '' : 'disabled'}>${open ? `${icon('check')}오늘 보상 받기` : '내일 또 만나요'}</button>`
       + '<button type="button" class="attendance-close">닫기</button>';
-    card.querySelector<HTMLButtonElement>(open ? '.attendance-claim' : '.attendance-close')?.focus({ preventScroll: true });
+    card.querySelector<HTMLButtonElement>(open ? '.day-claim' : '.attendance-close')?.focus({ preventScroll: true });
   };
 
   const close = () => {
@@ -53,10 +55,12 @@ export function openAttendance(onClose: (claimed: boolean) => void) {
   overlay.addEventListener('click', (event) => {
     const target = event.target as Element;
     if (target === overlay || target.closest('.attendance-close')) { close(); return; }
-    if (!target.closest('.attendance-claim')) return;
+    if (!target.closest('.day-claim')) return;
     const result = claimAttendance(dayKey());
     if (!result) return;
     claimed = true;
+    // Redraws after this keep the card still so only the claimed cell animates.
+    card.dataset.settled = '';
     const gains = [
       ...(result.reward.coins ? [`코인 +${result.reward.coins}`] : []),
       ...result.reward.items.map((id) => `${ITEMS[id].name} +1`),

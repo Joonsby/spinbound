@@ -5,7 +5,7 @@ export const PHYSICS = {
   maxFallSpeed: 900,
   // Horizontal speed caps (px/s).
   runSpeed: 270,
-  // Holding one direction on the ground slowly raises the cap past rollEnterSpeed.
+  // Holding one direction on the ground slowly raises the cap; speed alone never starts a roll.
   sprintSpeed: 350,
   sprintDelayMs: 700,
   sprintGain: 60,
@@ -24,8 +24,8 @@ export const PHYSICS = {
   jumpCutSpeed: 260,
   jumpBufferMs: 100,
   coyoteMs: 100,
-  // Auto-roll hysteresis.
-  rollEnterSpeed: 320,
+  // Rolls start only from a booster (rollMs) or a spin dash (dashMs) and end early below rollExitSpeed.
+  rollMs: 2500,
   rollExitSpeed: 260,
   // Spin dash: double-tap a direction on the ground. Below sprintSpeed, so it never reaches farther than a full run.
   dashSpeed: 340,
