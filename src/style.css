@@ -207,6 +207,9 @@ nav .actions .icon { font-size: 22px; }
 /* The banner shows on menu screens only; in play the stage takes the full height. */
 :root[data-screen="game"] { --banner-space: var(--safe-bottom); }
 :root[data-screen="game"] #ad-banner { display: none; }
+/* ONE store has no ads connected yet: the banner slot gives its space back. */
+:root[data-onestore="true"] { --banner-space: var(--safe-bottom); }
+:root[data-onestore="true"] #ad-banner { display: none; }
 .ad-overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 20px; background: #000d; }
 .ad-card { width: min(100%, 340px); padding: 26px 20px 20px; border: 3px dashed #5d6b88; border-radius: 20px; background: #141d30; text-align: center; }
 .ad-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--gold); color: var(--ink); font-size: 12px; }
@@ -311,6 +314,7 @@ nav .actions .icon { font-size: 22px; }
   #result-reward:has(+ #result-double[hidden]) { grid-column: 1 / -1; }
   #result-double { grid-column: 2; margin: 0; }
   #revive-coins { margin: 0; }
+  #revive-ad[hidden] + #revive-coins { grid-column: 1 / -1; }
   #revive-skip { grid-column: 1 / -1; margin: 0; }
 }
 /* Icon-only HUD buttons where the top row is short of room; the text stays as the accessible name. */

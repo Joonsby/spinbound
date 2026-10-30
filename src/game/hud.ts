@@ -1,5 +1,6 @@
 import { HP_POINTS, PHYSICS } from './config';
 import { RARITY_LABELS, type Character } from '../characters';
+import { inOneStore } from '../onestore';
 
 const SPEED_STEPS = 24;
 
@@ -221,7 +222,7 @@ export class Hud {
   // Clear reward under the stats; null hides it (game over). The ad button shows until the reward is doubled.
   setReward(amount: number | null, doubled = false) {
     this.reward.hidden = amount === null;
-    this.doubleButton.hidden = amount === null || doubled;
+    this.doubleButton.hidden = amount === null || doubled || inOneStore();
     this.doubleButton.disabled = false;
     if (amount !== null) this.reward.replaceChildren(stat('coin-icon', doubled ? '보상 2배 ' : '보상 ', doubled ? amount * 2 : amount, '코인'));
   }
@@ -251,8 +252,9 @@ export class Hud {
     const note = document.createElement('span');
     note.textContent = '마지막 체크포인트에서 HP를 가득 채워 이어 해요';
     this.reviveInfo.replaceChildren(note, stat('coin-icon', '보유 ', balance, '개'));
+    this.reviveAdButton.hidden = inOneStore();
     openModal(this.revive);
-    this.reviveAdButton.focus({ preventScroll: true });
+    [this.reviveAdButton, this.reviveCoinButton, this.reviveSkipButton].find((button) => !button.hidden && !button.disabled)?.focus({ preventScroll: true });
   }
 
   // Tutorial card over the paused game; the hint's " · " parts become separate lines.

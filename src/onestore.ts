@@ -14,6 +14,10 @@ type OneStoreSdk = {
 
 const lifecycle = { pause: new Set<() => void>(), resume: new Set<() => void>() };
 let sdk: Promise<OneStoreSdk | null> = Promise.resolve(null);
+let connected = false;
+
+// True once the store answered initializeAsync. No ads are connected there yet.
+export const inOneStore = () => connected;
 
 function inToss() {
   try {
@@ -34,7 +38,9 @@ export function loadOneStore() {
       client.on('resume', () => lifecycle.resume.forEach((listener) => listener()));
       const info = await client.initializeAsync();
       if (info.err) return null;
+      connected = true;
       const root = document.documentElement;
+      root.dataset.onestore = 'true';
       for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
         const value = info.safeArea?.[edge];
         if (Number.isFinite(value)) root.style.setProperty(`--native-safe-${edge}`, `${Math.max(0, value!)}px`);
