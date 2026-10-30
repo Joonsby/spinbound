@@ -9,7 +9,7 @@ import { PHYSICS } from './game/config';
 import { installDebugClock } from './game/debug';
 import { getPlayerProgress } from './progress';
 import { configureQuality, renderScaleFor } from './graphics/quality';
-import { APPLY_DISPLAY_EVENT, LOGICAL_HEIGHT, RENDER_SCALE_EVENT, getRenderScale, setRenderScale } from './graphics/display';
+import { APPLY_DISPLAY_EVENT, LOGICAL_HEIGHT, RENDER_SCALE_EVENT, getRenderScale, getViewZoom, setRenderScale, setViewZoom, viewZoomFor } from './graphics/display';
 import './style.css';
 
 document.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -23,6 +23,7 @@ const gameSize = () => {
   const height = Math.max(1, parent.clientHeight || window.innerHeight);
   const width = Math.max(1, parent.clientWidth || window.innerWidth);
   setRenderScale(renderScaleFor(height));
+  setViewZoom(viewZoomFor(height));
   const scale = getRenderScale();
   return { width: Math.max(1, Math.round(width / height * LOGICAL_HEIGHT * scale)), height: Math.round(LOGICAL_HEIGHT * scale) };
 };
@@ -49,10 +50,10 @@ startCloudSave(() => {
 });
 
 function applyGameSize() {
-  const previous = getRenderScale();
+  const previous = [getRenderScale(), getViewZoom()].join();
   const { width, height } = gameSize();
   game.scale.setGameSize(width, height);
-  if (getRenderScale() !== previous) game.events.emit(RENDER_SCALE_EVENT, getRenderScale());
+  if ([getRenderScale(), getViewZoom()].join() !== previous) game.events.emit(RENDER_SCALE_EVENT, getRenderScale());
 }
 // Settings emit APPLY_DISPLAY_EVENT after a quality change.
 game.events.on(APPLY_DISPLAY_EVENT, applyGameSize);

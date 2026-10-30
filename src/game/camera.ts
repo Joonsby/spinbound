@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PHYSICS } from './config';
-import { getRenderScale, LOGICAL_HEIGHT } from '../graphics/display';
+import { getRenderScale, getViewZoom, LOGICAL_HEIGHT } from '../graphics/display';
 
 const MIN_LEAD = 60;
 const MAX_LEAD_RATIO = 0.24;
@@ -26,13 +26,15 @@ export class CameraController {
   constructor(private camera: Phaser.Cameras.Scene2D.Camera, private target: Phaser.GameObjects.Components.Transform, private worldWidth: number, private worldTop = 0) {}
 
   // Visible logical size at the current zoom.
-  get viewWidth() { return this.camera.width / getRenderScale() / this.zoom; }
-  get viewHeight() { return this.camera.height / getRenderScale() / this.zoom; }
+  get viewWidth() { return this.camera.width / getRenderScale() / this.zoom / this.baseZoom; }
+  get viewHeight() { return this.camera.height / getRenderScale() / this.zoom / this.baseZoom; }
+  // Screen-size zoom (see viewZoomFor); the arena applies its own.
+  private get baseZoom() { return this.arena ? 1 : getViewZoom(); }
 
   follow(x: number, y: number) {
     this.arena = undefined;
     this.zoom = 1;
-    this.camera.startFollow(this.target, true, 1, this.worldTop < 0 ? 0.12 : 1);
+    this.camera.startFollow(this.target, true, 1, 1);
     this.apply();
     this.snap(x, y, this.direction);
   }
@@ -64,19 +66,22 @@ export class CameraController {
     if (this.arena) {
       const { left, right, ground } = this.arena;
       const logicalWidth = camera.width / getRenderScale();
-      this.zoom = Phaser.Math.Clamp(logicalWidth / (right - left), ARENA_MIN_ZOOM, 1);
+      // Zoom in as far as the screen size asks while the whole arena still fits.
+      this.zoom = Phaser.Math.Clamp(logicalWidth / (right - left), ARENA_MIN_ZOOM, getViewZoom());
       const viewHeight = this.viewHeight;
       const top = Math.min(0, ground - viewHeight * ARENA_FLOOR_RATIO);
       camera.setZoom(this.zoom * getRenderScale()).setBounds(left, top, right - left, Math.max(LOGICAL_HEIGHT, viewHeight));
-      if (this.viewWidth >= right - left - 1) { camera.stopFollow(); camera.centerOn((left + right) / 2, top + viewHeight / 2); }
+      if (this.viewWidth >= right - left - 1) { camera.stopFollow(); camera.centerOn((left + right) / 2, Math.max(top, ground - viewHeight * ARENA_FLOOR_RATIO) + viewHeight / 2); }
       else camera.startFollow(this.target, true, 1, 1);
       return;
     }
-    const zoom = this.zoom * this.celebrateZoom;
+    const zoom = this.zoom * this.celebrateZoom * this.baseZoom;
     const viewHeight = LOGICAL_HEIGHT / Math.min(1, zoom);
     // Bottom-anchored: zooming out reveals sky above, never empty space under the floor.
     const top = Math.min(this.worldTop, LOGICAL_HEIGHT - viewHeight);
     camera.setZoom(zoom * getRenderScale()).setBounds(0, top, this.worldWidth, LOGICAL_HEIGHT - top);
+    // A view shorter than the world scrolls vertically; ease it so jumps do not shake the screen.
+    camera.setLerp(1, zoom > 1.01 || this.worldTop < 0 ? 0.12 : 1);
   }
 
   update(deltaMs: number, vx: number, facing: number) {

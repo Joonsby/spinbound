@@ -3,7 +3,7 @@ import { createRobotArt, robotPortraitUrl } from './graphics/robot-art';
 import { PORTRAIT_BLINK_KEY, PORTRAIT_KEY } from './graphics/asset-manifest';
 import { CHARACTERS, RARITY_LABELS, type Character } from './characters';
 import { STAGES_PER_WORLD, WORLD_NAMES, worldOf } from './stage-gen';
-import { UPGRADES, type StatKey } from './game/config';
+import { HP_POINTS, UPGRADES, type StatKey } from './game/config';
 import { upgradeCost, upgradeLevel } from './game/economy';
 import { buyCharacter, buyItem, equipCharacter, getEquippedRobot, getPlayerProgress, itemCount, savePlayerProgress, useItems, ITEM_IDS, ITEMS, upgradeStat, type ItemId } from './progress';
 import type { SceneData } from './game/game-scene';
@@ -75,8 +75,8 @@ function characterCard(character: Character, confirming: string) {
 
 const STATS: Record<StatKey, { name: string; icon: string; value: (value: number) => string; effect: (value: number) => string }> = {
   attack: { name: '공격력', icon: 'attack', value: (value) => String(value), effect: (value) => `공격 한 번에 ${value} 피해` },
-  defense: { name: '방어력', icon: 'shield', value: (value) => `${value}%`, effect: (value) => `맞으면 하트 ${Math.round(100 - value) / 100}개 잃음` },
-  maxHp: { name: '최대 HP', icon: 'heart', value: (value) => `하트 ${value}`, effect: (value) => `하트 ${value}개로 시작` },
+  defense: { name: '방어력', icon: 'shield', value: (value) => `${value}%`, effect: (value) => `맞으면 HP ${Math.round(HP_POINTS * (100 - value) / 100)} 감소` },
+  maxHp: { name: '최대 HP', icon: 'heart', value: (value) => `HP ${value * HP_POINTS}`, effect: (value) => `HP ${value * HP_POINTS}로 시작` },
 };
 
 function upgradeCard(stat: StatKey) {

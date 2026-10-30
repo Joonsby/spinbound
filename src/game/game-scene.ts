@@ -555,6 +555,14 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  // Falling out of the stage kills outright, whatever the HP or shield.
+  private fall() {
+    if (this.finished) return;
+    this.hp = 0;
+    this.updateScore();
+    this.endStage(false);
+  }
+
   private takeHit(sourceX: number) {
     if (!this.loseHp()) return false;
     if (!this.finished) {
@@ -748,10 +756,7 @@ export class GameScene extends Phaser.Scene {
       player.sprite.x = 15;
       player.body.setVelocityX(Math.max(0, player.body.velocity.x));
     }
-    if (player.y > 720) {
-      this.loseHp();
-      if (!this.finished) this.respawn();
-    }
+    if (player.y > 720) this.fall();
   }
 
   // POST_UPDATE: physics has settled, so sprites, effects and HUD read final positions.

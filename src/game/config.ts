@@ -36,6 +36,9 @@ export const PHYSICS = {
 };
 export type MovementTuning = typeof PHYSICS;
 
+// HP is stored in hits (a plain hit costs 1); screens show it in points.
+export const HP_POINTS = 100;
+
 export const COMBAT = {
   invulnerableMs: 1000,
   knockbackMs: 220,

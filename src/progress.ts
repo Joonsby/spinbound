@@ -1,13 +1,13 @@
 import type { QualitySetting } from './graphics/quality';
 import { buyItem as payForItem, buyUpgrade, takeItems } from './game/economy';
-import { UPGRADES, type StatKey } from './game/config';
+import { HP_POINTS, UPGRADES, type StatKey } from './game/config';
 import { CHARACTERS, DEFAULT_CHARACTER, characterById, earnedCharacters, type Character } from './characters';
 
 const QUALITY_SETTINGS: QualitySetting[] = ['auto', 'low', 'medium', 'high'];
 // Single-stage items bought with coins before a stage; each start uses one of every chosen item.
 export const ITEMS = {
   shield: { name: '보호막', description: '첫 피격 1회를 막아요', price: 30 },
-  'extra-heart': { name: '추가 하트', description: '이번 판 최대 HP +1', price: 40 },
+  'extra-heart': { name: '체력 보강', description: `이번 판 최대 HP +${HP_POINTS}`, price: 40 },
   magnet: { name: '코인 자석', description: '가까운 코인을 끌어와요', price: 25 },
 } as const;
 export type ItemId = keyof typeof ITEMS;

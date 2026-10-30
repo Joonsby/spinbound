@@ -42,7 +42,7 @@ body { height: 100dvh; touch-action: none; }
 canvas { display: block; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.icon, .hud-button::before, .heart { background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.icon, .hud-button::before { background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
 .icon { display: inline-block; flex: none; width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
 .icon-left { --icon: var(--i-left); } .icon-right { --icon: var(--i-right); } .icon-jump { --icon: var(--i-jump); }
 .icon-star { --icon: var(--i-star); } .icon-heart { --icon: var(--i-heart); } .icon-sound-on { --icon: var(--i-sound-on); }
@@ -75,10 +75,12 @@ header small { display: block; color: var(--accent); font-size: 10px; margin-top
 .chip-score .icon { color: var(--gold); }
 .chip-hp.shielded::after, .chip-coin.magnet::after { content: ""; flex: none; width: 15px; height: 15px; background: var(--cyan); -webkit-mask: var(--i-shield) center / contain no-repeat; mask: var(--i-shield) center / contain no-repeat; }
 .chip-coin.magnet::after { background: #ff8a80; -webkit-mask-image: var(--i-magnet); mask-image: var(--i-magnet); }
-#hp { display: inline-flex; align-items: center; gap: 2px; color: #ffd0c8; }
-.heart { --icon: var(--i-heart); display: inline-block; width: 18px; height: 16px; color: var(--hp); }
-.heart { --fill: 1; background: linear-gradient(90deg, var(--hp) calc(var(--fill) * 100%), #ffffff38 0); }
-.heart.lost { --fill: 0; }
+.chip-hp .icon { color: var(--hp); }
+.hp-bar { position: relative; display: inline-block; width: 96px; height: 12px; border-radius: 999px; background: var(--panel-deep); overflow: hidden; }
+.hp-bar b { position: absolute; inset: 0; transform-origin: left center; transform: scaleX(var(--hp-ratio, 1)); background: linear-gradient(90deg, #4fd877, #b8f06a); transition: transform 0.25s ease-out; }
+.hp-bar.low b { background: linear-gradient(90deg, var(--hp), #ff9a6b); animation: hp-pulse 0.7s ease-in-out infinite alternate; }
+#hp-value { min-width: 2.2em; color: #ffd0c8; font-variant-numeric: tabular-nums; text-align: right; }
+@keyframes hp-pulse { to { opacity: 0.55; } }
 #scoreboard .speed-hud { grid-column: 1 / -1; justify-self: start; }
 .speed-hud { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; letter-spacing: 1px; }
 .speed-meter { position: relative; display: inline-block; width: 96px; height: 10px; border-radius: 999px; background: var(--panel-deep); overflow: hidden; }
@@ -215,7 +217,7 @@ body.boss-fight::after { content: "BOSS!"; position: fixed; left: 0; right: 0; t
   #scoreboard { top: calc(6px + var(--safe-top) + var(--host-top-gap)); left: calc(158px + var(--safe-left)); right: calc(200px + var(--safe-right)); width: auto; max-width: none; transform: none; justify-content: center; gap: 3px; font-size: 11px; }
   #scoreboard > span { padding: 2px 8px 2px 6px; border-width: 2px; box-shadow: none; }
   #scoreboard .speed-hud { justify-self: center; padding: 2px 8px; }
-  .heart { width: 15px; height: 13px; }
+  .hp-bar { width: 72px; height: 10px; }
   #status { top: calc(66px + var(--safe-top) + var(--host-top-gap)); left: 50%; right: auto; transform: translateX(-50%); max-width: calc(100% - 28px - var(--safe-left) - var(--safe-right)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10px; padding: 3px 10px; }
   nav { bottom: calc(6px + var(--banner-space)); left: calc(6px + var(--safe-left)); right: calc(6px + var(--safe-right)); }
   nav div { max-width: 188px; gap: 8px; }

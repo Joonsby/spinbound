@@ -1,9 +1,7 @@
-import { PHYSICS } from './config';
+import { HP_POINTS, PHYSICS } from './config';
 import { RARITY_LABELS, type Character } from '../characters';
 
 const SPEED_STEPS = 24;
-// Above this many hit points the HUD shows numbers instead of hearts.
-const MAX_HEARTS = 7;
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
@@ -25,6 +23,7 @@ export class Hud {
   private score = element('#score');
   private coins = element('#coin-count');
   private hp = element('#hp');
+  private hpValue = element('#hp-value');
   private hpChip = element('.chip-hp');
   private coinChip = element('.chip-coin');
   private stage = element('#stage-label');
@@ -80,16 +79,11 @@ export class Hud {
     const text = `${hp} / ${maxHp}`;
     if (text === this.shownHp) return;
     this.shownHp = text;
-    this.hp.setAttribute('aria-label', `HP ${text}`);
-    if (maxHp > MAX_HEARTS) { this.hp.textContent = `${Math.round(hp * 10) / 10} / ${maxHp}`; return; }
-    // Defense makes hits cost part of a heart; a partly lost heart is drawn partly filled.
-    this.hp.replaceChildren(...Array.from({ length: maxHp }, (_, index) => {
-      const heart = document.createElement('i');
-      const fill = Math.max(0, Math.min(1, hp - index));
-      heart.className = fill > 0 ? 'heart' : 'heart lost';
-      if (fill > 0 && fill < 1) heart.style.setProperty('--fill', fill.toFixed(2));
-      return heart;
-    }));
+    const points = Math.ceil(hp * HP_POINTS - 1e-6);
+    this.hp.setAttribute('aria-label', `HP ${points} / ${maxHp * HP_POINTS}`);
+    this.hp.style.setProperty('--hp-ratio', String(Math.max(0, Math.min(1, hp / maxHp))));
+    this.hp.classList.toggle('low', hp / maxHp <= 0.34);
+    this.hpValue.textContent = String(points);
   }
 
   // Active pre-stage items show as marks on the HP and coin chips.
