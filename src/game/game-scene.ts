@@ -18,6 +18,7 @@ import { addCurrency, addItems, equipCharacter, getEquippedRobot, getPlayerProgr
 import { robotPortraitUrl } from '../graphics/robot-art';
 import type { Character } from '../characters';
 import { showRewardedAd } from '../ads';
+import { confirmDialog } from '../confirm-dialog';
 import { BOOSTS, COMBAT, ECONOMY, GIMMICK, HP_POINTS, PHYSICS } from './config';
 import { clearReward, reviveOffer, worldBonus } from './economy';
 import { STAGES_PER_WORLD, worldOf } from '../stage-gen';
@@ -78,6 +79,7 @@ export class GameScene extends Phaser.Scene {
   private adOpen = false;
   private tipOpen = false;
   private pauseOpen = false;
+  private confirmOpen = false;
   private unlocks: Character[] = [];
   private tipOpenedAt = 0;
   private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
@@ -129,6 +131,7 @@ export class GameScene extends Phaser.Scene {
     this.adOpen = false;
     this.tipOpen = false;
     this.pauseOpen = false;
+    this.confirmOpen = false;
     this.unlocks = [];
     this.ropes = [];
   }
@@ -190,7 +193,7 @@ export class GameScene extends Phaser.Scene {
     const tip = document.querySelector<HTMLElement>('#tip')!;
     const onTipClick = () => this.closeTip();
     const onKey = (event: KeyboardEvent) => {
-      if (event.repeat) return;
+      if (event.repeat || this.confirmOpen) return;
       if (this.tipOpen) { if (['Space', 'Enter', 'Escape'].includes(event.code)) this.closeTip(); }
       else if (event.code === 'Escape' || event.code === 'KeyP') { if (this.pauseOpen) this.closePause(); else this.openPause(); }
     };
@@ -344,19 +347,16 @@ export class GameScene extends Phaser.Scene {
   private bindButtons() {
     const button = (id: string) => document.querySelector<HTMLButtonElement>(`#${id}`)!;
     // With a hundred stages both restart buttons replay the current one.
-    button('restart').onclick = () => this.restartGame(true);
+    // Mid-run (pause menu) restart and home throw the run away, so they ask first; after a result they do not.
+    button('restart').onclick = () => { void this.confirmLeave('restart'); };
     button('result-restart').onclick = () => this.restartGame(true);
     this.hud.unlockEquipButton.onclick = () => { if (this.unlocks[0]) equipCharacter(this.unlocks[0].id); this.nextUnlock(); };
     this.hud.unlockKeepButton.onclick = () => this.nextUnlock();
     this.hud.pauseButton.onclick = () => this.openPause();
     this.hud.resumeButton.onclick = () => this.closePause();
     this.hud.tipsResetButton.onclick = () => { resetTips(); this.hud.tipsResetButton.disabled = true; };
-    const returnToLobby = () => {
-      this.resetInput(); this.finished = true; this.hud.hideResult();
-      this.scene.start('MainMenuScene');
-    };
-    button('lobby').onclick = returnToLobby;
-    button('result-lobby').onclick = returnToLobby;
+    button('lobby').onclick = () => { void this.confirmLeave('home'); };
+    button('result-lobby').onclick = () => this.returnToLobby();
     this.hud.doubleButton.onclick = () => { void this.doubleReward(); };
     this.hud.reviveAdButton.onclick = () => { void this.reviveWithAd(); };
     this.hud.reviveCoinButton.onclick = () => { if (!this.adOpen && spendCurrency(ECONOMY.reviveCost)) this.revive(); };
@@ -468,6 +468,25 @@ export class GameScene extends Phaser.Scene {
 
   private detachRopes() {
     for (const rope of this.ropes) rope.detach(this.player, this.time.now);
+  }
+
+  private returnToLobby() {
+    this.resetInput();
+    this.finished = true;
+    this.hud.hideResult();
+    this.scene.start('MainMenuScene');
+  }
+
+  private async confirmLeave(action: 'restart' | 'home') {
+    if (this.confirmOpen) return;
+    this.confirmOpen = true;
+    const confirmed = await confirmDialog(action === 'restart'
+      ? { title: '다시 시작할까요?', message: '이번 판 진행은 사라져요', confirm: '다시하기' }
+      : { title: '홈으로 나갈까요?', message: '이번 판 진행은 사라져요', confirm: '나가기' });
+    this.confirmOpen = false;
+    if (!confirmed || !this.scene.isActive()) return;
+    if (action === 'restart') this.restartGame(true);
+    else this.returnToLobby();
   }
 
   private restartGame(retryCurrentStage = false) {
