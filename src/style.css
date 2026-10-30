@@ -196,6 +196,9 @@ nav .actions .icon { font-size: 22px; }
 @media (orientation: landscape) and (max-height: 600px) { .tip-card { padding: 12px 16px 10px; } .tip-card h1 { margin: 6px 0 8px; } #tip-text { gap: 4px; margin-bottom: 10px; } #tip-text li { padding: 5px 10px; font-size: 13px; } #tip-continue { min-height: 42px; } .tip-card small { margin-top: 5px; } }
 #ad-banner { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; height: var(--banner-space); padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left); box-sizing: border-box; display: flex; justify-content: center; background: #0a1222; border-top: 2px solid #2b2236; }
 #ad-banner-slot { display: flex; align-items: center; justify-content: center; width: min(100%, 320px); height: var(--banner-h); box-sizing: border-box; border: 2px dashed #5d6b88; color: #8b97b2; font-size: 12px; letter-spacing: 0.5px; }
+/* The banner shows on menu screens only; in play the stage takes the full height. */
+:root[data-screen="game"] { --banner-space: var(--safe-bottom); }
+:root[data-screen="game"] #ad-banner { display: none; }
 .ad-overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 20px; background: #000d; }
 .ad-card { width: min(100%, 340px); padding: 26px 20px 20px; border: 3px dashed #5d6b88; border-radius: 20px; background: #141d30; text-align: center; }
 .ad-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--gold); color: var(--ink); font-size: 12px; }
