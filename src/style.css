@@ -406,7 +406,7 @@ body[data-screen="menu"] > header, body[data-screen="menu"] > #scoreboard, body[
 .attendance-close { --face: var(--panel-deep); --edge: #070c18; width: 100%; min-height: 44px; margin-top: 8px; }
 .notify-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #ff4a3d; box-shadow: 0 0 0 2px var(--ink); animation: status-pulse 1s ease-in-out infinite; }
 @media (orientation: landscape) and (max-height: 600px) { .attendance-card > * { grid-column: 1 / -1; } .attendance-days { grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 8px 0 4px; } .day-cell:last-child { grid-column: auto; } .day-cell { min-height: 60px; } .attendance-milestones img { width: 40px; height: 48px; } .attendance-claim { grid-column: 1; margin: 0; } .attendance-close { grid-column: 2; margin: 0; min-height: 44px; } }
-.stage-mode { position: absolute; left: 5px; top: 5px; padding: 1px 6px; border: 2px solid var(--ink); border-radius: 999px; background: #ff6b6b; color: #fff; font-size: 10px; white-space: nowrap; }
+.stage-mode { position: absolute; right: 5px; top: 5px; padding: 1px 6px; border: 2px solid var(--ink); border-radius: 999px; background: #ff6b6b; color: #fff; font-size: 10px; white-space: nowrap; }
 .stage-mode[data-mode="pursuit"] { background: var(--gold); color: var(--ink); }
 .stage-mode[data-mode="time"] { background: var(--cyan); color: var(--ink); }
 .prepare-hint .stage-mode { position: static; display: inline-block; margin-right: 4px; vertical-align: 1px; }
