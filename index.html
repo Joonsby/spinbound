@@ -8,7 +8,7 @@
   </head>
   <body data-screen="menu">
     <main id="game" aria-label="횡스크롤 액션 게임"></main>
-    <header><span class="brand">SPINBOUND <small id="stage-label">STAGE 1 / 10</small></span><div class="header-actions"><button id="sound-toggle" class="hud-button" type="button" aria-label="사운드 끄기" aria-pressed="true">ON</button><button id="restart" class="hud-button" type="button">재시작</button><button id="lobby" class="hud-button" type="button">로비</button></div></header>
+    <header><span class="brand">SPINBOUND <small id="stage-label">STAGE 1 / 10</small></span><div class="header-actions"><button id="pause" class="hud-button" type="button" aria-label="일시정지">일시정지</button></div></header>
     <div id="scoreboard" aria-label="현재 기록"><span class="chip-score"><i class="icon icon-star" aria-hidden="true"></i><span class="sr-only">점수</span><strong id="score">0</strong></span><span class="chip-coin"><i class="coin-icon" aria-hidden="true"></i><span class="sr-only">코인</span><strong id="coin-count">0</strong></span><span class="chip-hp"><i class="icon icon-heart" aria-hidden="true"></i><span id="hp" class="hp-bar" role="img" aria-label="HP 300 / 300"><b></b></span><strong id="hp-value">300</strong></span><span id="speed-hud" class="speed-hud">SPEED <i class="speed-meter"><b></b></i> <strong>SPIN</strong></span></div>
     <p id="status" role="status">← → / A D 이동 · Space / ↑ 점프 · 같은 방향 두 번 톡톡 스핀 대시</p>
     <nav aria-label="게임 조작">
@@ -36,6 +36,27 @@
         <button id="revive-ad" type="button"><span class="ad-chip">AD</span>광고 보고 무료 부활</button>
         <button id="revive-coins" type="button">코인으로 부활</button>
         <button id="revive-skip" type="button">포기하기</button>
+      </div>
+    </section>
+    <section id="pause-menu" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+      <div class="result-card pause-card">
+        <i class="result-badge" aria-hidden="true"></i>
+        <h1 id="pause-title">일시정지</h1>
+        <p id="pause-stage" class="pause-stage"></p>
+        <p id="pause-stats"></p>
+        <button id="pause-resume" type="button"><i class="icon icon-play" aria-hidden="true"></i>계속하기</button>
+        <div class="pause-actions">
+          <button id="restart" type="button"><i class="icon" aria-hidden="true"></i>다시하기</button>
+          <button id="lobby" type="button"><i class="icon" aria-hidden="true"></i>홈</button>
+          <button id="pause-settings" type="button" aria-expanded="false" aria-controls="pause-panel"><i class="icon icon-settings" aria-hidden="true"></i>설정</button>
+        </div>
+        <div id="pause-panel" hidden>
+          <div class="pause-actions">
+            <button id="sound-toggle" type="button" aria-pressed="true"><i class="icon" aria-hidden="true"></i><span>사운드 켬</span></button>
+            <button id="pause-tips" type="button"><i class="icon icon-flag" aria-hidden="true"></i>튜토리얼 다시</button>
+          </div>
+          <ul class="pause-help" aria-label="조작 방법"><li>← → 이동</li><li>점프 길게: 높이</li><li>두 번 톡톡: 대시</li><li>달리면 구르기</li></ul>
+        </div>
       </div>
     </section>
     <section id="unlock" role="dialog" aria-modal="true" aria-labelledby="unlock-title" hidden>

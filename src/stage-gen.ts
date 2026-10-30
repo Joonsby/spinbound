@@ -11,6 +11,9 @@ const STEP = 240;
 const SHAFT = 260;
 const THICK = 30;
 const MAX_BLOCK = 1000;
+const CHECKPOINT_SPACING = 3000;
+// Every stage is about as long as stage 1 (12000px).
+const RUN_LENGTH = 10500;
 
 export const WORLD_NAMES = ['새싹 초원', '버섯 숲', '용암 협곡', '바람 고원', '안개 숲', '화산 공장', '구름 들판', '깊은 밀림', '불꽃 요새', '별빛 정상'];
 export const STAGES_PER_WORLD = 10;
@@ -197,9 +200,14 @@ class Builder {
 
 const round100 = (value: number) => Math.round(value / 100) * 100;
 
+const restsBetween = (from: number, to: number) => {
+  const count = Math.max(0, Math.round((to - from) / CHECKPOINT_SPACING) - 1);
+  return Array.from({ length: count }, (_, i) => from + (to - from) * (i + 1) / (count + 1));
+};
+
 function runLayout(b: Builder, extra = 0) {
-  const width = round100(3000 + extra + 1500 * b.difficulty + b.rand() * 600);
-  const rests = width < 3200 ? [width * 0.5] : [width * 0.36, width * 0.68];
+  const width = round100(RUN_LENGTH + extra + 1500 * b.difficulty + b.rand() * 1000);
+  const rests = restsBetween(0, width);
   const gaps = b.run(420, width - 330, GROUND, { pits: true, boosts: true, ropes: true, headroom: 600, rests });
   b.floor(0, width, GROUND, gaps);
   b.stage.width = width;
@@ -222,7 +230,8 @@ function backLayout(b: Builder) {
     ? { ...platform, x: flip(platform.max), min: flip(platform.max), max: flip(platform.min) }
     : { ...platform, x: flip(platform.x) });
   stage.ropes = stage.ropes!.map((rope) => ({ ...rope, x: flip(rope.x) }));
-  stage.checkpoints = stage.checkpoints!.map((point) => ({ ...point, x: flip(point.x) })).reverse();
+  // Mirroring already lists them from the new start (right) to the goal (left).
+  stage.checkpoints = stage.checkpoints!.map((point) => ({ ...point, x: flip(point.x) }));
   stage.checkpoint = stage.checkpoints[0] ?? stage.checkpoint;
   stage.start = { ...stage.start!, x: flip(stage.start!.x) };
   stage.goal = { ...stage.goal!, x: flip(stage.goal!.x) };
@@ -232,8 +241,8 @@ function backLayout(b: Builder) {
 
 // Zigzag up: right on the ground, then each floor turns back one storey higher.
 function climbLayout(b: Builder) {
-  const floors = 2 + (b.difficulty > 0.5 && b.rand() < 0.6 ? 1 : 0);
-  const width = round100(2400 + 700 * b.difficulty + b.rand() * 400);
+  const floors = 3;
+  const width = round100(2800 + 500 * b.difficulty + b.rand() * 400);
   b.stage.width = width;
   let goal = { x: 0, top: GROUND };
   for (let k = 0; k <= floors; k++) {
@@ -260,8 +269,8 @@ function climbLayout(b: Builder) {
 
 // Zigzag down: start high, drop off each floor's end to the one below.
 function descentLayout(b: Builder) {
-  const floors = 2 + (b.difficulty > 0.5 && b.rand() < 0.6 ? 1 : 0);
-  const width = round100(2400 + 700 * b.difficulty + b.rand() * 400);
+  const floors = 3;
+  const width = round100(2800 + 500 * b.difficulty + b.rand() * 400);
   b.stage.width = width;
   let goal = { x: 0, top: GROUND };
   for (let k = floors; k >= 0; k--) {
@@ -284,24 +293,26 @@ function descentLayout(b: Builder) {
 
 // Up onto a sky bridge over a wall, then back down to the ground.
 function bridgeLayout(b: Builder) {
-  const width = round100(3800 + 800 * b.difficulty + b.rand() * 400);
+  const width = round100(RUN_LENGTH + 1000 * b.difficulty + b.rand() * 1000);
   const bridgeLeft = round100(width * 0.3);
   const bridgeRight = round100(width * 0.72);
   const wall = round100((bridgeLeft + bridgeRight) / 2);
   const high = GROUND - STEP;
   b.stage.width = width;
-  const before = b.run(420, bridgeLeft - SHAFT - 160, GROUND, { pits: true, boosts: true, ropes: false, headroom: 600, rests: [] });
-  const after = b.run(bridgeRight + 300, width - 330, GROUND, { pits: true, boosts: true, ropes: false, headroom: 600, rests: [] });
+  const before = b.run(420, bridgeLeft - SHAFT - 160, GROUND, { pits: true, boosts: true, ropes: false, headroom: 600, rests: restsBetween(0, bridgeLeft - SHAFT) });
+  const after = b.run(bridgeRight + 300, width - 330, GROUND, { pits: true, boosts: true, ropes: false, headroom: 600, rests: restsBetween(bridgeRight, width) });
   b.floor(0, width, GROUND, [...before, ...after]);
   // The wall props up the bridge and closes the way underneath it.
   b.stage.platforms.push([wall, (high + THICK + GROUND) / 2, 80, GROUND - high - THICK]);
   b.coinLine(bridgeLeft + 80, wall - 120, GROUND - 40, 90);
   b.connectUp(bridgeLeft, GROUND, -1, bridgeLeft - SHAFT - 70);
-  const bridgeGaps = b.run(bridgeLeft + 280, bridgeRight - 150, high, { pits: true, boosts: false, ropes: false, headroom: 600, rests: [] });
+  const bridgeGaps = b.run(bridgeLeft + 280, bridgeRight - 150, high, { pits: true, boosts: false, ropes: false, headroom: 600, rests: restsBetween(bridgeLeft, bridgeRight) });
   b.floor(bridgeLeft, bridgeRight, high, bridgeGaps);
   b.checkpoint(bridgeLeft + 150, high);
   b.sign(bridgeRight - 90, high, '↓ 아래로!');
   b.checkpoint(bridgeRight + 150, GROUND);
+  // Laid out section by section; the game expects them in the order they are reached.
+  b.checkpoints.sort((a, c) => a.x - c.x);
   return b.finish({ x: 90, top: GROUND }, { x: width - 130, top: GROUND }, high);
 }
 
@@ -316,6 +327,30 @@ export function generateStage(world: number, slot: number): StageData {
   if (layout === 'finale') return runLayout(builder, 1200);
   const build = { run: runLayout, back: backLayout, climb: climbLayout, descent: descentLayout, bridge: bridgeLayout }[layout];
   return build(builder);
+}
+
+// World 1 is hand-made but short; a generated run after its old goal brings it to stage-1 length.
+export function extendStage(stage: StageData, slot: number): StageData {
+  const from = stage.width;
+  const width = round100(RUN_LENGTH - 900 + slot * 300);
+  const b = new Builder(seeded(7919 + slot * 104729), slot * 0.015, stage.theme, stage.name, width);
+  const gaps = b.run(from + 250, width - 330, GROUND, { pits: true, boosts: true, ropes: slot >= 5, headroom: 600, rests: restsBetween(from - CHECKPOINT_SPACING / 2, width) });
+  b.floor(from, width, GROUND, gaps);
+  const tail = b.stage;
+  return {
+    ...stage,
+    width,
+    platforms: [...stage.platforms, ...tail.platforms],
+    oneWayPlatforms: [...(stage.oneWayPlatforms ?? []), ...tail.oneWayPlatforms!],
+    coins: [...stage.coins, ...tail.coins],
+    spikes: [...stage.spikes, ...tail.spikes],
+    traps: [...(stage.traps ?? []), ...tail.traps!],
+    enemyDetails: [...(stage.enemyDetails ?? []), ...tail.enemyDetails!],
+    pads: [...stage.pads, ...tail.pads],
+    movingPlatforms: [...stage.movingPlatforms, ...tail.movingPlatforms],
+    ropes: [...(stage.ropes ?? []), ...tail.ropes!],
+    checkpoints: [...(stage.checkpoints ?? [stage.checkpoint]), ...b.checkpoints],
+  };
 }
 
 export const worldOf = (stageIndex: number) => Math.floor(stageIndex / STAGES_PER_WORLD) + 1;

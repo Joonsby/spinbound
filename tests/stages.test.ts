@@ -193,6 +193,28 @@ test('100 stages in 10 worlds, each generated world ending in a finale', () => {
   assert.ok(STAGES.some((stage) => stage.goal && stage.start && stage.goal.y > stage.start.y + 200));
 });
 
+test('every stage is about as long as stage 1', () => {
+  for (const [index, stage] of STAGES.entries()) {
+    // Path length: the width once per storey that has a long floor.
+    const storeys = new Set(stage.platforms.filter(([, , width]) => width >= 500).map(([, y, , height]) => y - height / 2)).size;
+    assert.ok(stage.width * storeys >= 10000, `stage ${index + 1}: ${stage.width}px × ${storeys}`);
+  }
+});
+
+test('checkpoints come in the order a run reaches them, about every 3000px on a single floor', () => {
+  for (const [index, stage] of STAGES.entries()) {
+    const points = stage.checkpoints ?? [stage.checkpoint];
+    const sameFloor = points.every((point) => point.y === points[0].y);
+    if (!sameFloor) continue;
+    const xs = points.map((point) => point.x);
+    const rightward = !stage.goal || !stage.start || stage.goal.x > stage.start.x;
+    const ordered = rightward ? xs.every((x, i) => i === 0 || x > xs[i - 1]) : xs.every((x, i) => i === 0 || x < xs[i - 1]);
+    assert.ok(ordered, `stage ${index + 1} checkpoints out of order`);
+    const path = [rightward ? 0 : stage.width, ...xs, rightward ? stage.width : 0];
+    for (let i = 1; i < path.length; i++) assert.ok(Math.abs(path[i] - path[i - 1]) <= 4800, `stage ${index + 1}: gap near ${path[i - 1]}`);
+  }
+});
+
 test('stage 1 is a short session: at most ~12k px with checkpoints every ≤ 3k px', () => {
   const stage = STAGES[0];
   assert.ok(stage.width <= 12000);

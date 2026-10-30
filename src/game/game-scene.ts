@@ -18,7 +18,7 @@ import { addCurrency, addItems, equipCharacter, getEquippedRobot, getPlayerProgr
 import { robotPortraitUrl } from '../graphics/robot-art';
 import type { Character } from '../characters';
 import { showRewardedAd } from '../ads';
-import { BOOSTS, COMBAT, ECONOMY, GIMMICK, PHYSICS } from './config';
+import { BOOSTS, COMBAT, ECONOMY, GIMMICK, HP_POINTS, PHYSICS } from './config';
 import { clearReward, reviveOffer, worldBonus } from './economy';
 import { STAGES_PER_WORLD, worldOf } from '../stage-gen';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
@@ -36,7 +36,7 @@ import { MovingPlatforms } from './mechanics/moving-platforms';
 import { SwingRope } from './mechanics/swing-rope';
 import { BreakableWalls } from './mechanics/breakable-walls';
 import { installDebugHooks } from './debug';
-import { markTipSeen, seenTips } from './tutorial';
+import { markTipSeen, resetTips, seenTips } from './tutorial';
 
 const START = { x: 90, y: 440 };
 const CRYSTAL_IDLE_TINT = 0x8fa3b8;
@@ -77,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   private rewardDoubled = false;
   private adOpen = false;
   private tipOpen = false;
+  private pauseOpen = false;
   private unlocks: Character[] = [];
   private tipOpenedAt = 0;
   private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
@@ -127,6 +128,7 @@ export class GameScene extends Phaser.Scene {
     this.rewardDoubled = false;
     this.adOpen = false;
     this.tipOpen = false;
+    this.pauseOpen = false;
     this.unlocks = [];
     this.ropes = [];
   }
@@ -187,10 +189,17 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render, this);
     const tip = document.querySelector<HTMLElement>('#tip')!;
     const onTipClick = () => this.closeTip();
-    const onTipKey = (event: KeyboardEvent) => { if (!event.repeat && ['Space', 'Enter', 'Escape'].includes(event.code)) this.closeTip(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (this.tipOpen) { if (['Space', 'Enter', 'Escape'].includes(event.code)) this.closeTip(); }
+      else if (event.code === 'Escape' || event.code === 'KeyP') { if (this.pauseOpen) this.closePause(); else this.openPause(); }
+    };
     tip.addEventListener('click', onTipClick);
-    document.addEventListener('keydown', onTipKey);
-    const unbindEnvironment = bindAppEnvironment(this, () => this.resetInput(), () => this.audio.pauseForBackground(), () => this.audio.resumeFromBackground());
+    document.addEventListener('keydown', onKey);
+    // Leaving the app mid-run opens the pause menu, so it waits for the player on return.
+    const unbindEnvironment = bindAppEnvironment(this, () => this.resetInput(),
+      () => { this.audio.pauseForBackground(); this.openPause(); },
+      () => { if (!this.pauseOpen) this.audio.resumeFromBackground(); });
     installPerformanceDiagnostics(this);
     installFpsWatchdog(this);
     installDebugHooks(this, {
@@ -206,16 +215,18 @@ export class GameScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render, this);
       this.resultTimer?.remove(false);
       this.controls.destroy();
+      // Leaving from the pause menu: wake the shared audio context for the next scene.
+      if (this.pauseOpen) this.audio.resumeFromBackground();
       this.audio.destroy();
       this.effects.destroy();
       this.hud.nextButton.onclick = null;
-      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'result-double', 'revive-ad', 'revive-coins', 'revive-skip', 'unlock-equip', 'unlock-keep']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
+      for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'result-double', 'revive-ad', 'revive-coins', 'revive-skip', 'unlock-equip', 'unlock-keep', 'pause', 'pause-resume', 'pause-tips']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
       this.hud.hideResult();
       this.hud.hideTip();
       // The animation manager is shared by every scene.
-      if (this.tipOpen) this.anims.resumeAll();
+      if (this.tipOpen || this.pauseOpen) this.anims.resumeAll();
       tip.removeEventListener('click', onTipClick);
-      document.removeEventListener('keydown', onTipKey);
+      document.removeEventListener('keydown', onKey);
     });
     this.bindButtons();
   }
@@ -337,6 +348,9 @@ export class GameScene extends Phaser.Scene {
     button('result-restart').onclick = () => this.restartGame(true);
     this.hud.unlockEquipButton.onclick = () => { if (this.unlocks[0]) equipCharacter(this.unlocks[0].id); this.nextUnlock(); };
     this.hud.unlockKeepButton.onclick = () => this.nextUnlock();
+    this.hud.pauseButton.onclick = () => this.openPause();
+    this.hud.resumeButton.onclick = () => this.closePause();
+    this.hud.tipsResetButton.onclick = () => { resetTips(); this.hud.tipsResetButton.disabled = true; };
     const returnToLobby = () => {
       this.resetInput(); this.finished = true; this.hud.hideResult();
       this.scene.start('MainMenuScene');
@@ -578,11 +592,7 @@ export class GameScene extends Phaser.Scene {
     markTipSeen(index);
     this.tipOpen = true;
     this.tipOpenedAt = performance.now();
-    this.resetInput();
-    this.physics.pause();
-    this.tweens.pauseAll();
-    this.anims.pauseAll();
-    this.audio.setRollHum(false);
+    this.freeze();
     this.hud.showTip(index + 1, sections.length, title.split(' · ').pop()!, hint);
   }
 
@@ -591,10 +601,44 @@ export class GameScene extends Phaser.Scene {
     if (!this.tipOpen || performance.now() - this.tipOpenedAt < 350) return;
     this.tipOpen = false;
     this.hud.hideTip();
+    this.unfreeze();
+  }
+
+  private freeze() {
+    this.resetInput();
+    this.physics.pause();
+    this.tweens.pauseAll();
+    this.anims.pauseAll();
+    this.audio.setRollHum(false);
+  }
+
+  private unfreeze() {
     this.resetInput();
     this.tweens.resumeAll();
     this.anims.resumeAll();
     this.physics.resume();
+  }
+
+  private openPause() {
+    if (this.finished || this.tipOpen || this.pauseOpen || this.adOpen) return;
+    this.pauseOpen = true;
+    this.freeze();
+    this.audio.pauseForBackground();
+    const stage = STAGES[this.stageIndex];
+    const checkpoints = (stage.checkpoints ?? [stage.checkpoint]).length;
+    this.hud.showPause(`STAGE ${this.stageIndex + 1} · ${stage.name}`, {
+      score: this.totalScore(), coins: this.coinCount, hp: Math.ceil(this.hp * HP_POINTS - 1e-6),
+      checkpoint: `${this.lastCheckpoint + 1} / ${checkpoints}`,
+      items: [...(this.shield ? [{ icon: 'shield', name: '보호막' }] : []), ...(this.magnet ? [{ icon: 'magnet', name: '코인 자석' }] : [])],
+    });
+  }
+
+  private closePause() {
+    if (!this.pauseOpen) return;
+    this.pauseOpen = false;
+    this.hud.hidePause();
+    this.unfreeze();
+    this.audio.resumeFromBackground();
   }
 
   // New robots from this clear, one card at a time over the result card.
@@ -652,7 +696,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    if (this.finished || this.tipOpen) return;
+    if (this.finished || this.tipOpen || this.pauseOpen) return;
     const now = this.time.now;
     if (this.hitStopUntil) {
       if (now < this.hitStopUntil) return;
@@ -709,7 +753,7 @@ export class GameScene extends Phaser.Scene {
 
   // POST_UPDATE: physics has settled, so sprites, effects and HUD read final positions.
   private render(_time: number, delta: number) {
-    if (this.tipOpen) return;
+    if (this.tipOpen || this.pauseOpen) return;
     const now = this.time.now;
     const { player } = this;
     this.effects.update(delta);

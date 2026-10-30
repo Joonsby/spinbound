@@ -70,15 +70,15 @@ function characterCard(character: Character, confirming: string) {
   else if (owned) action = `<button data-robot="${id}">장착</button>`;
   else if (unlock.kind === 'coins') action = `<button data-buy-robot="${id}" aria-label="${name} 코인 ${unlock.price}개로 구매" ${player.currency < unlock.price ? 'disabled' : ''}>${confirming === id ? '한 번 더 누르면 구매' : `${coin}${unlock.price}`}</button>`;
   else action = unlock.kind === 'world'
-    ? `<button disabled aria-label="월드 ${unlock.world} 클리어로 해금">${icon('lock')}WORLD ${unlock.world}</button>`
+    ? `<button disabled aria-label="월드 ${unlock.world} 클리어로 해금">${icon('lock')}월드 ${unlock.world}</button>`
     : `<button disabled aria-label="스테이지 ${unlockStage(unlock)} 클리어로 해금">${icon('lock')}STAGE ${unlockStage(unlock)}</button>`;
   return `<article class="char-card${owned ? '' : ' locked'}${equipped ? ' equipped' : ''}" data-rarity="${rarity}"><span class="rarity-badge">${RARITY_LABELS[rarity]}</span><img class="char-portrait" src="${robotPortraitUrl(character)}" alt=""><h3>${name}</h3>${action}</article>`;
 }
 
 const STATS: Record<StatKey, { name: string; icon: string; value: (value: number) => string; effect: (value: number) => string }> = {
-  attack: { name: '공격력', icon: 'attack', value: (value) => String(value), effect: (value) => `공격 한 번에 ${value} 피해` },
-  defense: { name: '방어력', icon: 'shield', value: (value) => `${value}%`, effect: (value) => `맞으면 HP ${Math.round(HP_POINTS * (100 - value) / 100)} 감소` },
-  maxHp: { name: '최대 HP', icon: 'heart', value: (value) => `HP ${value * HP_POINTS}`, effect: (value) => `HP ${value * HP_POINTS}로 시작` },
+  attack: { name: '공격력', icon: 'attack', value: (value) => String(value), effect: (value) => `1회 ${value} 피해` },
+  defense: { name: '방어력', icon: 'shield', value: (value) => `${value}%`, effect: (value) => `피격 시 HP −${Math.round(HP_POINTS * (100 - value) / 100)}` },
+  maxHp: { name: '최대 HP', icon: 'heart', value: (value) => String(value * HP_POINTS), effect: (value) => `시작 HP ${value * HP_POINTS}` },
 };
 
 function upgradeCard(stat: StatKey) {
@@ -91,24 +91,27 @@ function upgradeCard(stat: StatKey) {
   const button = cost === null
     ? '<button disabled>MAX</button>'
     : `<button data-upgrade="${stat}" aria-label="${info.name} 강화, 코인 ${cost}개" ${currency < cost ? 'disabled' : ''}>${coin}${cost}</button>`;
-  return `<article class="boost-card upgrade-card" data-stat="${stat}"><span class="boost-icon">${icon(info.icon)}</span><h3>${info.name} <small>Lv ${upgradeLevel(value, rule)} / ${rule.costs.length}</small></h3><p>${info.effect(value)}</p><span class="boost-owned">${change}</span><div class="boost-actions">${button}</div></article>`;
+  return `<article class="boost-card upgrade-card" data-stat="${stat}"><span class="boost-icon">${icon(info.icon)}</span><h3>${info.name} <small>Lv${upgradeLevel(value, rule)}/${rule.costs.length}</small></h3><p>${info.effect(value)}</p><span class="boost-owned">${change}</span><div class="boost-actions">${button}</div></article>`;
 }
 
 function upgradesContent() {
   const { currency } = getPlayerProgress();
-  return `<div class="prepare"><div class="prepare-head"><h2>영구 강화</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">코인으로 올린 능력치는 모든 스테이지에 계속 적용돼요</p><div class="boost-grid">${(Object.keys(UPGRADES) as StatKey[]).map(upgradeCard).join('')}</div></div>`;
+  return `<div class="prepare"><div class="prepare-head"><h2>영구 강화</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">강화는 모든 스테이지에 적용돼요</p><div class="boost-grid">${(Object.keys(UPGRADES) as StatKey[]).map(upgradeCard).join('')}</div></div>`;
 }
 
 function charactersContent(confirming: string) {
   const player = getPlayerProgress();
   const owned = CHARACTERS.filter((character) => player.ownedCharacters.includes(character.id)).length;
-  return `<div class="collection"><div class="prepare-head"><h2>보유 ${owned} / ${CHARACTERS.length}</h2><span class="chip">${coin}코인 ${player.currency}</span></div><p class="prepare-hint">일반은 스테이지를 깨면, 영웅은 월드를 처음 끝내면 얻어요 · 희귀와 전설은 코인으로 해금해요</p><div class="char-grid">${CHARACTERS.map((character) => characterCard(character, confirming)).join('')}</div></div>`;
+  return `<div class="collection"><div class="prepare-head"><h2>보유 ${owned} / ${CHARACTERS.length}</h2><span class="chip">${coin}코인 ${player.currency}</span></div><p class="prepare-hint">일반·영웅은 클리어로, 희귀·전설은 코인으로</p><div class="char-grid">${CHARACTERS.map((character) => characterCard(character, confirming)).join('')}</div></div>`;
 }
+
+// Cards sit under the world bar: generated stages drop the world name, world 1 keeps its own title.
+const shortName = (stage: StageData, index: number) => index < STAGES_PER_WORLD ? stage.name.split(' · ')[0] : stage.name.split(' · ').pop()!;
 
 function stageCard(stage: StageData, index: number, unlocked: number) {
   const status = index + 1 > unlocked ? 'locked' : index + 1 < unlocked ? 'cleared' : 'current';
   const label = status === 'locked' ? `${icon('lock')}잠김` : status === 'cleared' ? `${icon('check')}클리어` : '도전!';
-  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${(index + 1) % STAGES_PER_WORLD === 0 ? '<span class="stage-final">FINAL</span>' : ''}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : stage.name}</span><span class="stage-status">${label}</span></button>`;
+  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${(index + 1) % STAGES_PER_WORLD === 0 ? '<span class="stage-final">FINAL</span>' : ''}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : shortName(stage, index)}</span><span class="stage-status">${label}</span></button>`;
 }
 
 function prepareContent(stageIndex: number, picked: ReadonlySet<ItemId>) {
@@ -119,7 +122,7 @@ function prepareContent(stageIndex: number, picked: ReadonlySet<ItemId>) {
     const on = owned > 0 && picked.has(id);
     return `<article class="boost-card${on ? ' picked' : ''}" data-item="${id}"><span class="boost-icon">${icon(ITEM_ICONS[id])}</span><h3>${item.name}</h3><p>${item.description}</p><span class="boost-owned">보유 ${owned}개</span><div class="boost-actions"><button data-pick="${id}" aria-pressed="${on}" ${owned ? '' : 'disabled'}>${on ? `${icon('check')}사용` : '사용하기'}</button><button data-buy="${id}" aria-label="${item.name} 코인 ${item.price}개로 구매" ${currency < item.price ? 'disabled' : ''}>${coin}${item.price}</button></div></article>`;
   }).join('');
-  return `<div class="prepare"><div class="prepare-head"><h2>STAGE ${stageIndex + 1} · ${STAGES[stageIndex].name}</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">이번 판에 쓸 아이템을 고르세요 · 출발하면 고른 아이템이 1개씩 쓰여요</p><div class="boost-grid">${cards}</div><div class="prepare-actions"><button data-action="stages">스테이지 선택</button><button data-action="start" class="menu-primary">${icon('play')}출발!</button></div></div>`;
+  return `<div class="prepare"><div class="prepare-head"><h2>STAGE ${stageIndex + 1} · ${STAGES[stageIndex].name}</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">출발하면 고른 아이템이 1개씩 쓰여요</p><div class="boost-grid">${cards}</div><div class="prepare-actions"><button data-action="stages" aria-label="스테이지 선택">${icon('left')}목록</button><button data-action="start" class="menu-primary">${icon('play')}출발!</button></div></div>`;
 }
 
 // Thumbnail colours come from the stage themes (set through CSSOM, no inline style markup).
@@ -180,7 +183,7 @@ export class MenuScreenScene extends Phaser.Scene {
     if (this.screen === 'characters') content = charactersContent(this.confirming);
     if (this.screen === 'inventory') {
       const owned = ITEM_IDS.filter((id) => itemCount(id) > 0);
-      content = `<article class="menu-panel"><h2>보유 아이템 ${player.items.length}개</h2>${owned.length ? `<ul class="item-grid">${owned.map((id) => `<li>${icon(ITEM_ICONS[id])}${ITEMS[id].name} ×${itemCount(id)}</li>`).join('')}</ul>` : `<div class="empty-state">${icon('box')}<p>보유한 아이템이 없습니다.</p></div>`}<p>아이템은 스테이지를 고른 뒤 출전 준비 화면에서 코인으로 살 수 있어요.</p></article>`;
+      content = `<article class="menu-panel"><h2>보유 아이템 ${player.items.length}개</h2>${owned.length ? `<ul class="item-grid">${owned.map((id) => `<li>${icon(ITEM_ICONS[id])}${ITEMS[id].name} ×${itemCount(id)}</li>`).join('')}</ul>` : `<div class="empty-state">${icon('box')}<p>보유한 아이템이 없습니다.</p></div>`}<p>아이템은 출전 준비 화면에서 살 수 있어요</p></article>`;
     }
     if (this.screen === 'settings') content = `<article class="menu-panel settings-panel"><section class="setting"><h2>${icon('sound-on')}사운드</h2><button data-action="sound" aria-pressed="${getSoundEnabled()}">사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}</button></section><section class="setting"><h2>${icon('settings')}그래픽 품질</h2><div class="segmented" role="group" aria-label="그래픽 품질">${QUALITY_OPTIONS.map((value) => `<button data-quality="${value}" aria-pressed="${player.graphicsQuality === value}">${QUALITY_LABELS[value]}</button>`).join('')}</div><p>현재 적용 ${QUALITY_LABELS[qualityLevel()]} · 낮음은 배경 레이어와 효과 수를 줄입니다</p></section><section class="setting"><h2>${icon('box')}클라우드 저장</h2><p data-cloud-status>${cloudSaveStatusText()}</p><button data-action="cloud-sync">지금 동기화</button></section><section class="setting"><h2>${icon('flag')}튜토리얼</h2><p>스테이지 1의 기능 설명을 다시 멈춰서 보여줘요</p><button data-action="tips-reset">튜토리얼 다시 보기</button></section></article>`;
     const root = mount(this, titles[this.screen], content, (button) => {

@@ -65,7 +65,9 @@ export class GameAudio {
   }
 
   private refreshButton() {
-    this.button.textContent = soundEnabled ? 'ON' : 'OFF';
+    const label = this.button.querySelector('span');
+    if (label) label.textContent = soundEnabled ? '사운드 켬' : '사운드 끔';
+    else this.button.textContent = soundEnabled ? 'ON' : 'OFF';
     this.button.setAttribute('aria-pressed', String(soundEnabled));
     this.button.setAttribute('aria-label', `사운드 ${soundEnabled ? '끄기' : '켜기'}`);
   }

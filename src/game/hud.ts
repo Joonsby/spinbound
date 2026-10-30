@@ -5,7 +5,7 @@ const SPEED_STEPS = 24;
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
-function stat(iconClass: string, label: string, value: number, unit: string) {
+function stat(iconClass: string, label: string, value: number | string, unit: string) {
   const item = document.createElement('span');
   const mark = document.createElement('i');
   const number = document.createElement('strong');
@@ -49,6 +49,15 @@ export class Hud {
   private revive = element('#revive');
   private reviveInfo = element('#revive-info');
   private tip = element('#tip');
+  private pause = element('#pause-menu');
+  private pauseCard = element('.pause-card');
+  private pauseStage = element('#pause-stage');
+  private pauseStats = element('#pause-stats');
+  private pausePanel = element('#pause-panel');
+  private pauseSettings = element<HTMLButtonElement>('#pause-settings');
+  readonly pauseButton = element<HTMLButtonElement>('#pause');
+  readonly resumeButton = element<HTMLButtonElement>('#pause-resume');
+  readonly tipsResetButton = element<HTMLButtonElement>('#pause-tips');
   private tipStep = element('#tip-step');
   private tipTitle = element('#tip-title');
   private tipText = element('#tip-text');
@@ -60,6 +69,7 @@ export class Hud {
 
   constructor() {
     this.speedHud.style.setProperty('--roll-mark', String(PHYSICS.rollEnterSpeed / PHYSICS.boostSpeed));
+    this.pauseSettings.onclick = () => this.togglePauseSettings(this.pausePanel.hidden);
   }
 
   setStage(index: number, total: number) { this.stage.textContent = `STAGE ${index + 1} / ${total}`; }
@@ -166,7 +176,37 @@ export class Hud {
 
   hideTip() { this.tip.hidden = true; }
 
+  // items: icon names of the active pre-stage items, shown together in one chip.
+  showPause(stage: string, stats: { score: number; coins: number; hp: number; checkpoint: string; items: { icon: string; name: string }[] }) {
+    this.pauseStage.textContent = stage;
+    this.pauseStats.replaceChildren(
+      stat('icon icon-star', '', stats.score, '점'), stat('coin-icon', '', stats.coins, '개'), stat('icon icon-heart', 'HP ', stats.hp, ''),
+      stat('icon icon-flag', '', stats.checkpoint, ''),
+    );
+    if (stats.items.length) {
+      const chip = document.createElement('span');
+      chip.className = 'result-stat pause-items';
+      chip.setAttribute('aria-label', stats.items.map((item) => item.name).join(', '));
+      chip.append(...stats.items.map((item) => { const mark = document.createElement('i'); mark.className = `icon icon-${item.icon}`; return mark; }));
+      this.pauseStats.append(chip);
+    }
+    this.togglePauseSettings(false);
+    this.tipsResetButton.disabled = false;
+    this.pause.hidden = false;
+    this.resumeButton.focus({ preventScroll: true });
+  }
+
+  hidePause() { this.pause.hidden = true; }
+
+  // Settings replace the stats so the card keeps its height on a phone held sideways.
+  private togglePauseSettings(open: boolean) {
+    this.pausePanel.hidden = !open;
+    this.pauseCard.classList.toggle('settings', open);
+    this.pauseSettings.setAttribute('aria-expanded', String(open));
+  }
+
   hideResult() {
+    this.pause.hidden = true;
     this.unlock.hidden = true;
     this.result.hidden = true;
     this.revive.hidden = true;

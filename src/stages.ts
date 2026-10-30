@@ -2,7 +2,7 @@ export type EnemyKind = 'patrol' | 'fly' | 'charger';
 export type PadKind = 'spring' | 'spring-left' | 'spring-right' | 'boost';
 
 // The extension lets the Node tests load this module directly.
-import { generateStage, STAGES_PER_WORLD, WORLD_NAMES } from './stage-gen.ts';
+import { extendStage, generateStage, STAGES_PER_WORLD, WORLD_NAMES } from './stage-gen.ts';
 
 export type StageData = {
   theme: 0 | 1 | 2;
@@ -258,7 +258,8 @@ const WORLD_ONE: StageData[] = [
 ];
 
 export const STAGES: StageData[] = [
-  ...WORLD_ONE,
+  WORLD_ONE[0],
+  ...WORLD_ONE.slice(1).map((stage, index) => extendStage(stage, index + 2)),
   ...Array.from({ length: (WORLD_NAMES.length - 1) * STAGES_PER_WORLD }, (_, index) =>
     generateStage(Math.floor(index / STAGES_PER_WORLD) + 2, index % STAGES_PER_WORLD + 1)),
 ];

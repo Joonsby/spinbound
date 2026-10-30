@@ -16,7 +16,7 @@ export function showRewardedAd(purpose: string): Promise<boolean> {
     const purposeText = overlay.querySelector<HTMLElement>('.ad-purpose')!;
     const timerText = overlay.querySelector<HTMLElement>('.ad-timer')!;
     const button = overlay.querySelector<HTMLButtonElement>('.ad-close')!;
-    purposeText.textContent = `${purpose} · 실제 광고가 들어갈 자리예요`;
+    purposeText.textContent = purpose;
     let left = MOCK_AD_SECONDS;
     const render = () => {
       timerText.textContent = left > 0 ? `${left}초 후 보상을 받을 수 있어요` : '광고 시청 완료';
