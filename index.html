@@ -8,7 +8,8 @@
   </head>
   <body data-screen="menu">
     <main id="game" aria-label="횡스크롤 액션 게임"></main>
-    <header><span class="brand">SPINBOUND <small id="stage-label">STAGE 1 / 10</small></span><div id="run-progress" class="run-progress" role="progressbar" aria-label="스테이지 진행도" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="run-track"><b></b><span class="run-marks"></span><i class="run-dot"></i></span><i class="icon icon-flag" aria-hidden="true"></i></div><div class="header-actions"><button id="pause" class="hud-button" type="button" aria-label="일시정지">일시정지</button></div></header>
+    <div id="danger" aria-hidden="true"></div>
+    <header><span class="brand">SPINBOUND <small id="stage-label">STAGE 1 / 10</small></span><div id="run-progress" class="run-progress" role="progressbar" aria-label="스테이지 진행도" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="run-track"><b></b><span class="run-marks"></span><i class="run-chaser" hidden></i><i class="run-dot"></i></span><span class="run-timer" hidden></span><i class="icon icon-flag" aria-hidden="true"></i></div><div class="header-actions"><button id="pause" class="hud-button" type="button" aria-label="일시정지">일시정지</button></div></header>
     <div id="scoreboard" aria-label="현재 기록"><span class="chip-score"><i class="icon icon-star" aria-hidden="true"></i><span class="sr-only">점수</span><strong id="score">0</strong></span><span class="chip-coin"><i class="coin-icon" aria-hidden="true"></i><span class="sr-only">코인</span><strong id="coin-count">0</strong></span><span class="chip-hp"><i class="icon icon-heart" aria-hidden="true"></i><span id="hp" class="hp-bar" role="img" aria-label="HP 300 / 300"><b></b></span><strong id="hp-value">300</strong></span><span id="speed-hud" class="speed-hud">SPEED <i class="speed-meter"><b></b></i> <strong>SPIN</strong></span></div>
     <p id="status" role="status">← → / A D 이동 · Space / ↑ 점프 · 같은 방향 두 번 톡톡 스핀 대시</p>
     <nav aria-label="게임 조작">

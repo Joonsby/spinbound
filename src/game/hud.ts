@@ -60,6 +60,9 @@ export class Hud {
   private speedHud = element('#speed-hud');
   private progress = element('#run-progress');
   private progressMarks = element('#run-progress .run-marks');
+  private timer = element('#run-progress .run-timer');
+  private chaser = element('#run-progress .run-chaser');
+  private danger = element('#danger');
   private result = element('#result');
   private resultTitle = element('#result-title');
   private resultStats = element('#result-stats');
@@ -100,6 +103,10 @@ export class Hud {
   private shownHp = '';
   private shownProgress = -1;
   private shownReached = -2;
+  // Undefined until the first write, so a new stage always resets what the last one left.
+  private shownTimer: string | undefined;
+  private shownChaser: number | undefined;
+  private shownDanger: number | undefined;
 
   constructor() {
     this.speedHud.style.setProperty('--roll-mark', String(PHYSICS.rollEnterSpeed / PHYSICS.boostSpeed));
@@ -159,6 +166,34 @@ export class Hud {
       this.shownReached = reached;
       Array.from(this.progressMarks.children).forEach((mark, index) => mark.classList.toggle('reached', index <= reached));
     }
+  }
+
+  // Time attack clock; null hides it.
+  setTimer(ms: number | null) {
+    const text = ms === null ? '' : (Math.ceil(ms / 100) / 10).toFixed(1);
+    if (text === this.shownTimer) return;
+    this.shownTimer = text;
+    this.timer.hidden = ms === null;
+    this.timer.textContent = text;
+    this.timer.classList.toggle('low', ms !== null && ms < 10000);
+  }
+
+  // Dragon or thief on the progress bar; null hides it.
+  setChaser(share: number | null, kind: 'dragon' | 'thief' = 'dragon') {
+    const step = share === null ? -1 : Math.max(0, Math.round(share * 400) / 400);
+    if (step === this.shownChaser) return;
+    this.shownChaser = step;
+    this.chaser.hidden = share === null;
+    this.chaser.dataset.kind = kind;
+    this.progress.style.setProperty('--chaser', String(Math.max(0, step)));
+  }
+
+  // Red glow on the left edge as the dragon closes in (0–1).
+  setDanger(level: number) {
+    const step = Math.round(level * 20) / 20;
+    if (step === this.shownDanger) return;
+    this.shownDanger = step;
+    this.danger.style.setProperty('--danger', String(step));
   }
 
   setSpeed(speed: number, rolling: boolean) {

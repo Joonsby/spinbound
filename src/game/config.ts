@@ -75,6 +75,8 @@ export const ECONOMY = {
   // First clear of a world's last stage, growing per world; comes with one of every item.
   worldBonus: 300,
   worldBonusPerWorld: 100,
+  // Clear reward multiplier on dragon, pursuit and time attack stages.
+  modeBonus: 1.5,
 };
 export type EconomyTuning = typeof ECONOMY;
 

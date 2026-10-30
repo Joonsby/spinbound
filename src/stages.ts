@@ -1,8 +1,10 @@
 export type EnemyKind = 'patrol' | 'fly' | 'charger' | 'hopper';
+// dragon: a giant dragon chases from behind · pursuit: catch the coin thief before the goal · time: beat the clock.
+export type StageMode = 'dragon' | 'pursuit' | 'time';
 export type PadKind = 'spring' | 'spring-left' | 'spring-right' | 'boost';
 
 // The extension lets the Node tests load this module directly.
-import { extendStage, generateStage, makeFair, STAGES_PER_WORLD, WORLD_NAMES } from './stage-gen.ts';
+import { extendStage, generateStage, makeFair, withMode, STAGES_PER_WORLD, WORLD_NAMES } from './stage-gen.ts';
 
 export type StageData = {
   theme: 0 | 1 | 2;
@@ -16,6 +18,9 @@ export type StageData = {
   goal?: { x: number; y: number };
   // Floor-level path from start to goal (turns included) for the progress bar.
   route?: { x: number; y: number }[];
+  mode?: StageMode;
+  // Time attack limit in seconds.
+  timeLimit?: number;
   top?: number;
   oneWayPlatforms?: [number, number, number, number][];
   enemyDetails?: { kind: EnemyKind; x: number; y: number; min: number; max: number }[];
@@ -259,9 +264,12 @@ const WORLD_ONE: StageData[] = [
   },
 ];
 
+// Special stages of world 1, by stage number.
+const WORLD_ONE_MODES: Record<number, StageMode> = { 4: 'time', 7: 'dragon', 9: 'pursuit' };
+
 export const STAGES: StageData[] = [
   WORLD_ONE[0],
-  ...WORLD_ONE.slice(1).map((stage, index) => extendStage(stage, index + 2)),
+  ...WORLD_ONE.slice(1).map((stage, index) => withMode(extendStage(stage, index + 2), WORLD_ONE_MODES[index + 2])),
   ...Array.from({ length: (WORLD_NAMES.length - 1) * STAGES_PER_WORLD }, (_, index) =>
     generateStage(Math.floor(index / STAGES_PER_WORLD) + 2, index % STAGES_PER_WORLD + 1)),
 ].map(makeFair);

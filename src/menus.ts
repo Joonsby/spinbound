@@ -8,7 +8,7 @@ import { upgradeCost, upgradeLevel } from './game/economy';
 import { buyCharacter, buyItem, equipCharacter, getEquippedRobot, getPlayerProgress, itemCount, savePlayerProgress, useItems, ITEM_IDS, ITEMS, upgradeStat, type ItemId } from './progress';
 import type { SceneData } from './game/game-scene';
 import { getSoundEnabled, setSoundEnabled } from './audio';
-import { STAGES, type StageData } from './stages';
+import { STAGES, type StageData, type StageMode } from './stages';
 import { bindAppEnvironment } from './app-environment';
 import { themeForStage } from './graphics/themes';
 import { configureQuality, qualityLevel, type QualitySetting } from './graphics/quality';
@@ -106,12 +106,17 @@ function charactersContent(confirming: string) {
 }
 
 // Cards sit under the world bar: generated stages drop the world name, world 1 keeps its own title.
+const MODE_BADGES: Record<StageMode, string> = { dragon: '용 추격', pursuit: '추격전', time: '타임어택' };
+const MODE_HINTS: Record<StageMode, string> = { dragon: '뒤에서 용이 쫓아와요 · 멈추면 잡혀요', pursuit: '코인 도둑을 골인 전에 잡으세요', time: '제한 시간 안에 골인하세요' };
+const modeHint = (stage: StageData) => stage.mode ? `${modeBadge(stage)} ${MODE_HINTS[stage.mode]}${stage.timeLimit ? ` · ${stage.timeLimit}초` : ''}` : '출발하면 고른 아이템이 1개씩 쓰여요';
+const modeBadge = (stage: StageData) => stage.mode ? `<span class="stage-mode" data-mode="${stage.mode}">${MODE_BADGES[stage.mode]}</span>` : '';
+
 const shortName = (stage: StageData, index: number) => index < STAGES_PER_WORLD ? stage.name.split(' · ')[0] : stage.name.split(' · ').pop()!;
 
 function stageCard(stage: StageData, index: number, unlocked: number) {
   const status = index + 1 > unlocked ? 'locked' : index + 1 < unlocked ? 'cleared' : 'current';
   const label = status === 'locked' ? `${icon('lock')}잠김` : status === 'cleared' ? `${icon('check')}클리어` : '도전!';
-  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${(index + 1) % STAGES_PER_WORLD === 0 ? '<span class="stage-final">FINAL</span>' : ''}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : shortName(stage, index)}</span><span class="stage-status">${label}</span></button>`;
+  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${(index + 1) % STAGES_PER_WORLD === 0 ? '<span class="stage-final">FINAL</span>' : ''}${status === 'locked' ? '' : modeBadge(stage)}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : shortName(stage, index)}</span><span class="stage-status">${label}</span></button>`;
 }
 
 function prepareContent(stageIndex: number, picked: ReadonlySet<ItemId>) {
@@ -122,7 +127,7 @@ function prepareContent(stageIndex: number, picked: ReadonlySet<ItemId>) {
     const on = owned > 0 && picked.has(id);
     return `<article class="boost-card${on ? ' picked' : ''}" data-item="${id}"><span class="boost-icon">${icon(ITEM_ICONS[id])}</span><h3>${item.name}</h3><p>${item.description}</p><span class="boost-owned">보유 ${owned}개</span><div class="boost-actions"><button data-pick="${id}" aria-pressed="${on}" ${owned ? '' : 'disabled'}>${on ? `${icon('check')}사용` : '사용하기'}</button><button data-buy="${id}" aria-label="${item.name} 코인 ${item.price}개로 구매" ${currency < item.price ? 'disabled' : ''}>${coin}${item.price}</button></div></article>`;
   }).join('');
-  return `<div class="prepare"><div class="prepare-head"><h2>STAGE ${stageIndex + 1} · ${STAGES[stageIndex].name}</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">출발하면 고른 아이템이 1개씩 쓰여요</p><div class="boost-grid">${cards}</div><div class="prepare-actions"><button data-action="stages" aria-label="스테이지 선택">${icon('left')}목록</button><button data-action="start" class="menu-primary">${icon('play')}출발!</button></div></div>`;
+  return `<div class="prepare"><div class="prepare-head"><h2>STAGE ${stageIndex + 1} · ${STAGES[stageIndex].name}</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">${modeHint(STAGES[stageIndex])}</p><div class="boost-grid">${cards}</div><div class="prepare-actions"><button data-action="stages" aria-label="스테이지 선택">${icon('left')}목록</button><button data-action="start" class="menu-primary">${icon('play')}출발!</button></div></div>`;
 }
 
 // Thumbnail colours come from the stage themes (set through CSSOM, no inline style markup).

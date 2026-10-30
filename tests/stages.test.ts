@@ -260,3 +260,17 @@ test('checkpoints sit on the route in the order they are reached', () => {
     assert.ok(shares.every((share, i) => i === 0 || share > shares[i - 1]), `stage ${index + 1}: ${shares.map((share) => share.toFixed(2))}`);
   }
 });
+
+test('every world has a dragon chase, a pursuit and a time attack; chases run straight to the right', () => {
+  for (let world = 1; world <= STAGES.length / 10; world++) {
+    const modes = STAGES.slice((world - 1) * 10, world * 10).map((stage) => stage.mode);
+    for (const mode of ['dragon', 'pursuit', 'time'] as const) assert.ok(modes.includes(mode), `world ${world}: ${mode}`);
+  }
+  for (const [index, stage] of STAGES.entries()) {
+    if (stage.mode === 'dragon' || stage.mode === 'pursuit') {
+      const route = routeOf(stage);
+      assert.ok(route.length === 2 && route[1].x > route[0].x, `stage ${index + 1}`);
+    }
+    if (stage.mode === 'time') assert.ok((stage.timeLimit ?? 0) >= 30, `stage ${index + 1}: ${stage.timeLimit}s`);
+  }
+});

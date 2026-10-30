@@ -1,4 +1,4 @@
-import type { StageData } from './stages';
+import type { StageData, StageMode } from './stages';
 
 // Worlds 2+ are generated: a seeded builder lays floors (horizontal runs) joined by connectors
 // (stairs, elevators, springs, drops) so a stage can head right, left, up or down.
@@ -18,12 +18,13 @@ const RUN_LENGTH = 10500;
 export const WORLD_NAMES = ['새싹 초원', '버섯 숲', '용암 협곡', '바람 고원', '안개 숲', '화산 공장', '구름 들판', '깊은 밀림', '불꽃 요새', '별빛 정상'];
 export const STAGES_PER_WORLD = 10;
 
-type Layout = 'run' | 'back' | 'climb' | 'descent' | 'bridge' | 'finale';
-const LAYOUT_LABELS: Record<Layout, string> = { run: '질주', back: '되돌아가기', climb: '오르막', descent: '내리막', bridge: '구름다리', finale: '피날레' };
+type Layout = 'run' | 'back' | 'climb' | 'descent' | 'bridge' | 'finale' | StageMode;
+const LAYOUT_LABELS: Record<Layout, string> = { run: '질주', back: '되돌아가기', climb: '오르막', descent: '내리막', bridge: '구름다리', finale: '피날레', dragon: '용의 추격', pursuit: '도둑 추격', time: '타임어택' };
 // Slots 1–9 of a world; slot 10 is a longer finale run. Two plans alternate between worlds.
+// Every world has one dragon chase, one pursuit and one time attack.
 const PLANS: Layout[][] = [
-  ['run', 'climb', 'back', 'bridge', 'descent', 'run', 'climb', 'back', 'descent'],
-  ['run', 'descent', 'bridge', 'back', 'climb', 'run', 'bridge', 'descent', 'climb'],
+  ['run', 'climb', 'dragon', 'bridge', 'descent', 'time', 'climb', 'back', 'pursuit'],
+  ['run', 'descent', 'time', 'back', 'climb', 'dragon', 'bridge', 'pursuit', 'climb'],
 ];
 
 type Kind = 'rest' | 'spike' | 'gap' | 'mover' | 'patrol' | 'fly' | 'charger' | 'hopper' | 'spring' | 'boost' | 'block' | 'ledge' | 'rope';
@@ -342,8 +343,11 @@ export function generateStage(world: number, slot: number): StageData {
   const layout = slot === STAGES_PER_WORLD ? 'finale' : PLANS[world % 2][slot - 1];
   const builder = new Builder(rand, difficulty, theme, `${worldName} · ${LAYOUT_LABELS[layout]}`, 0);
   if (layout === 'finale') return runLayout(builder, 1200);
-  const build = { run: runLayout, back: backLayout, climb: climbLayout, descent: descentLayout, bridge: bridgeLayout }[layout];
-  return build(builder);
+  // Chases need a straight run to the right; time attacks reuse a floor-hopping layout.
+  const base = layout === 'dragon' || layout === 'pursuit' ? 'run' : layout === 'time' ? (world % 2 ? 'descent' : 'bridge') : layout;
+  const build = { run: runLayout, back: backLayout, climb: climbLayout, descent: descentLayout, bridge: bridgeLayout }[base];
+  const stage = build(builder);
+  return layout === 'dragon' || layout === 'pursuit' || layout === 'time' ? withMode(stage, layout) : stage;
 }
 
 // World 1 is hand-made but short; a generated run after its old goal brings it to stage-1 length.
@@ -416,6 +420,23 @@ export function makeFair(stage: StageData): StageData {
       return kept ? [{ ...enemy, ...kept }] : [];
     }),
   };
+}
+
+// Seconds for a time attack: a brisk run over the flat parts plus time for every climb or drop.
+export function timeLimitFor(stage: StageData) {
+  const route = routeOf(stage);
+  let flat = 0;
+  let turns = 0;
+  for (let i = 1; i < route.length; i++) {
+    if (route[i].y === route[i - 1].y) flat += Math.abs(route[i].x - route[i - 1].x);
+    else turns += 1;
+  }
+  return Math.ceil((flat / 190 + turns * 6 + 10) / 5) * 5;
+}
+
+export function withMode(stage: StageData, mode: StageMode | undefined): StageData {
+  if (!mode) return stage;
+  return { ...stage, mode, timeLimit: mode === 'time' ? timeLimitFor(stage) : undefined };
 }
 
 type Point = { x: number; y: number };

@@ -71,6 +71,13 @@ header small { display: block; color: var(--accent); font-size: 10px; margin-top
 .run-marks i { position: absolute; top: 50%; left: calc(var(--at) * 100%); width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border: 2px solid var(--ink); border-radius: 2px; background: #3a4a6a; transform: rotate(45deg); transition: background-color 0.2s, transform 0.3s cubic-bezier(0.3, 1.8, 0.5, 1); }
 .run-marks i.reached { background: var(--gold); transform: rotate(45deg) scale(1.25); }
 .run-dot { position: absolute; top: 50%; left: calc(var(--progress) * 100%); width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 3px solid var(--ink); border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px #5cf2ff66; }
+.run-chaser { position: absolute; top: 50%; left: calc(var(--chaser, 0) * 100%); width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid var(--ink); border-radius: 4px; background: #ff4a3d; transform: rotate(45deg); box-shadow: 0 0 8px #ff4a3dcc; }
+.run-chaser[data-kind="thief"] { border-radius: 50%; background: var(--gold); transform: none; box-shadow: 0 0 8px #ffd24acc; }
+.run-timer { flex: none; display: inline-flex; align-items: center; gap: 4px; min-width: 46px; color: #fff; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.run-timer::before { content: ""; flex: none; width: 9px; height: 9px; border: 2px solid var(--cyan); border-radius: 50%; }
+.run-timer.low { color: #ff8a80; animation: status-pulse 0.6s ease-in-out infinite; }
+#danger { position: absolute; top: 0; bottom: var(--banner-space); left: 0; width: 42%; pointer-events: none; background: linear-gradient(90deg, #ff2a1abf, #ff2a1a00); opacity: var(--danger, 0); transition: opacity 0.2s; }
+body[data-screen="menu"] > #danger { display: none; }
 .run-progress > .icon { flex: none; width: 16px; height: 16px; color: var(--gold); }
 .header-actions { display: flex; gap: 6px; }
 .hud-button { --face: var(--panel); --edge: var(--panel-deep); pointer-events: auto; min-height: 44px; padding: 8px 10px; font-size: 12px; letter-spacing: 0; }
@@ -371,6 +378,10 @@ body[data-screen="menu"] > header, body[data-screen="menu"] > #scoreboard, body[
 .stage-thumb { position: relative; display: block; height: 68px; border: 2px solid var(--ink); border-radius: 12px; overflow: hidden;
   background: linear-gradient(transparent 76%, var(--grass) 76% 83%, var(--soil) 83%), radial-gradient(56% 34% at 26% 86%, var(--hill) 98%, transparent 100%), radial-gradient(44% 50% at 76% 84%, var(--far) 98%, transparent 100%), radial-gradient(circle 9px at 74% 28%, var(--sun) 96%, transparent 100%), linear-gradient(var(--sky0), var(--sky1) 60%, var(--sky2)); }
 .stage-number { position: absolute; left: 5px; top: 5px; min-width: 26px; height: 26px; padding: 0 6px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 900; line-height: 22px; text-shadow: none; }
+.stage-mode { position: absolute; left: 5px; top: 5px; padding: 1px 6px; border: 2px solid var(--ink); border-radius: 999px; background: #ff6b6b; color: #fff; font-size: 10px; white-space: nowrap; }
+.stage-mode[data-mode="pursuit"] { background: var(--gold); color: var(--ink); }
+.stage-mode[data-mode="time"] { background: var(--cyan); color: var(--ink); }
+.prepare-hint .stage-mode { position: static; display: inline-block; margin-right: 4px; vertical-align: 1px; }
 .stage-final { position: absolute; right: 5px; top: 5px; padding: 1px 6px; border: 2px solid var(--ink); border-radius: 999px; background: var(--gold); color: var(--ink); font-size: 10px; letter-spacing: 1px; }
 .stage-name { display: block; font-size: 12px; line-height: 1.3; white-space: nowrap; }
 .stage-status { align-self: center; display: inline-flex; align-items: center; gap: 3px; padding: 2px 10px; border-radius: 999px; background: var(--panel-deep); color: var(--muted); font-size: 11px; text-shadow: none; }

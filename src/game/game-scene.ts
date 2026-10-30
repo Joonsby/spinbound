@@ -36,6 +36,8 @@ import { PadSystem } from './mechanics/pads';
 import { MovingPlatforms } from './mechanics/moving-platforms';
 import { SwingRope } from './mechanics/swing-rope';
 import { BreakableWalls } from './mechanics/breakable-walls';
+import { DragonChase, ThiefRun } from './mechanics/chasers';
+import { createChaseArt } from '../graphics/chase-art';
 import { installDebugHooks } from './debug';
 import { markTipSeen, resetTips, seenTips } from './tutorial';
 
@@ -47,6 +49,9 @@ const RULES: ContactRules = {
   stompTolerance: COMBAT.stompTolerance, minStompSpeed: COMBAT.minStompSpeed,
   minClosingSpeed: COMBAT.minClosingSpeed, rollExitSpeed: PHYSICS.rollExitSpeed,
 };
+
+type EndReason = 'dragon' | 'timeout' | 'escaped' | 'caught';
+const END_STATUS: Record<EndReason, string> = { dragon: '용에게 따라잡혔어요!', timeout: '시간 초과!', escaped: '도둑이 골인 지점으로 달아났어요', caught: '도둑 검거! 코인을 되찾았어요' };
 
 export type SceneData = { stageIndex?: number; hp?: number; coinCount?: number; enemyScore?: number; boosts?: ItemId[] };
 
@@ -100,6 +105,11 @@ export class GameScene extends Phaser.Scene {
   private pads!: PadSystem;
   private platforms!: MovingPlatforms;
   private ropes: SwingRope[] = [];
+  // Stage modes: the chasing dragon, the fleeing thief and the time attack clock (ms left).
+  private dragon?: DragonChase;
+  private thief?: ThiefRun;
+  private timeLeft = 0;
+  private fireAt = 0;
   private route: { x: number; y: number }[] = [];
   // Feet height the last time the player stood on something; places them on a floor of the route.
   private footY = 0;
@@ -137,6 +147,9 @@ export class GameScene extends Phaser.Scene {
     this.confirmOpen = false;
     this.unlocks = [];
     this.ropes = [];
+    this.dragon = undefined;
+    this.thief = undefined;
+    this.timeLeft = 0;
   }
 
   create() {
@@ -190,6 +203,7 @@ export class GameScene extends Phaser.Scene {
     ];
     this.enemies = new EnemySystem(this, enemyConfigs, this.stageIndex === 0, worldOf(this.stageIndex));
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
+    this.startMode(stage, spawn.x);
 
     this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width, worldTop);
     this.cameraControl.follow(spawn.x, spawn.y);
@@ -524,6 +538,8 @@ export class GameScene extends Phaser.Scene {
     this.wasRolling = false;
     this.effects.clear();
     this.cameraControl.snap(spawn.x, spawn.y, 1);
+    this.dragon?.reset(spawn.x, now);
+    this.thief?.reset(spawn.x, now);
     this.hud.setStatus(`${this.checkpointActive ? '체크포인트' : '시작 지점'}에서 부활 · ${this.deaths}회`);
   }
 
@@ -573,7 +589,60 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: sprite, alpha: 0.35, duration: 100, yoyo: true, repeat: 1 });
   }
 
-  private endStage(cleared: boolean) {
+  private startMode(stage: StageData, spawnX: number) {
+    const now = this.time.now;
+    const mode = stage.mode;
+    if (mode === 'dragon' || mode === 'pursuit') createChaseArt(this);
+    if (mode === 'dragon') {
+      this.dragon = new DragonChase(this, FLOOR_TOP);
+      this.dragon.reset(spawnX, now);
+      this.hud.setStatus('용이 쫓아와요! 멈추지 말고 달리세요');
+    } else if (mode === 'pursuit') {
+      this.thief = new ThiefRun(this, FLOOR_TOP, stage.goal?.x ?? stage.width - 130, (x) => this.groundBelow(x, FLOOR_TOP) === FLOOR_TOP);
+      this.thief.reset(spawnX, now);
+      this.hud.setStatus('코인 도둑을 골인 전에 잡으세요! 구르기·대시로 따라잡기');
+    } else if (mode === 'time') {
+      this.timeLeft = (stage.timeLimit ?? 60) * 1000;
+      this.hud.setStatus(`${stage.timeLimit}초 안에 골인하세요!`);
+    }
+    this.hud.setTimer(mode === 'time' ? this.timeLeft : null);
+    this.hud.setChaser(null);
+    this.hud.setDanger(0);
+  }
+
+  // Per-frame stage mode rules; true once one of them ended the stage.
+  private updateMode(now: number, delta: number) {
+    const { player } = this;
+    if (this.timeLeft > 0) {
+      this.timeLeft = Math.max(0, this.timeLeft - delta);
+      this.hud.setTimer(this.timeLeft);
+      if (this.timeLeft === 0) { this.endStage(false, 'timeout'); return true; }
+    }
+    if (this.dragon) {
+      const caught = this.dragon.update(now, delta, player.x);
+      const gap = player.x - this.dragon.x;
+      this.hud.setDanger(Phaser.Math.Clamp(1 - (gap - 60) / 500, 0, 1));
+      this.hud.setChaser(routeProgress(this.route, this.dragon.x, FLOOR_TOP), 'dragon');
+      if (gap < 340 && now >= this.fireAt) {
+        this.fireAt = now + 140;
+        this.effects.burst(this.dragon.x + 14, this.dragon.mouthY, 0xff8a1f, 5, 190);
+      }
+      if (caught) {
+        this.hp = 0;
+        this.updateScore();
+        this.endStage(false, 'dragon');
+        return true;
+      }
+    }
+    if (this.thief) {
+      const result = this.thief.update(now, delta, player.x, player.y);
+      this.hud.setChaser(routeProgress(this.route, this.thief.x, FLOOR_TOP), 'thief');
+      if (result) { this.endStage(result === 'caught', result); return true; }
+    }
+    return false;
+  }
+
+  private endStage(cleared: boolean, reason?: EndReason) {
     if (this.finished) return;
     this.finished = true;
     this.hitStopUntil = 0;
@@ -582,16 +651,17 @@ export class GameScene extends Phaser.Scene {
     if (cleared) {
       this.player.stop();
       this.hud.setProgress(1, this.lastCheckpoint);
-    } else this.player.die();
+    } else if (reason === 'timeout' || reason === 'escaped') this.player.stop();
+    else this.player.die();
     this.physics.pause();
     this.audio.stopMusic();
     this.audio.play(cleared ? 'clear' : 'death');
     const allCleared = cleared && this.stageIndex === STAGES.length - 1;
     const firstClear = cleared && getPlayerProgress().unlockedStage <= this.stageIndex + 1;
     if (cleared) unlockNextStage(this.stageIndex + 1, STAGES.length);
-    this.hud.setStatus(cleared ? (allCleared ? '전체 스테이지 클리어! 축하합니다' : `Stage ${this.stageIndex + 1} 클리어!`) : 'HP가 모두 소진되었습니다');
+    this.hud.setStatus(reason ? END_STATUS[reason] : cleared ? (allCleared ? '전체 스테이지 클리어! 축하합니다' : `Stage ${this.stageIndex + 1} 클리어!`) : 'HP가 모두 소진되었습니다');
     if (cleared) {
-      this.reward = clearReward(this.coinCount - this.stageStartCoins, ECONOMY);
+      this.reward = Math.round(clearReward(this.coinCount - this.stageStartCoins, ECONOMY) * (STAGES[this.stageIndex].mode ? ECONOMY.modeBonus : 1));
       addCurrency(this.reward);
       const finale = (this.stageIndex + 1) % STAGES_PER_WORLD === 0;
       const special = finale && firstClear ? worldBonus(worldOf(this.stageIndex), ECONOMY) : 0;
@@ -600,7 +670,7 @@ export class GameScene extends Phaser.Scene {
       this.cameraControl.celebrate(this);
       this.effects.confetti(this.player.x, this.player.y - 20);
       this.resultTimer = this.time.delayedCall(480, () => {
-        this.hud.showResult('clear', allCleared ? 'ALL CLEAR!' : 'STAGE CLEAR!', this.totalScore(), this.coinCount, !allCleared, '다시 하기');
+        this.hud.showResult('clear', allCleared ? 'ALL CLEAR!' : reason === 'caught' ? '도둑 검거!' : 'STAGE CLEAR!', this.totalScore(), this.coinCount, !allCleared, '다시 하기');
         this.hud.setReward(this.reward);
         this.hud.setWorldBonus(special || null);
         this.showUnlock();
@@ -609,10 +679,12 @@ export class GameScene extends Phaser.Scene {
     }
     this.effects.burst(this.player.x, this.player.y, 0xd7dde0, 12, 120);
     // A revive restarts from the last checkpoint, so without one there is nothing to offer.
-    const offer = reviveOffer(this.checkpointActive, getPlayerProgress().currency, ECONOMY);
+    // Running out of time or letting the thief escape ends the run; there is nothing to revive.
+    const final = reason === 'timeout' || reason === 'escaped';
+    const offer = reviveOffer(this.checkpointActive && !final, getPlayerProgress().currency, ECONOMY);
     this.resultTimer = this.time.delayedCall(650, () => {
       if (offer.offered) this.hud.showRevive(offer.cost, getPlayerProgress().currency);
-      else this.showGameOver();
+      else this.showGameOver(reason === 'timeout' ? 'TIME OVER' : reason === 'escaped' ? '놓쳤어요!' : 'GAME OVER');
     });
   }
 
@@ -686,9 +758,9 @@ export class GameScene extends Phaser.Scene {
 
   private totalScore() { return this.coinCount * COMBAT.coinScore + this.enemyScore; }
 
-  private showGameOver() {
+  private showGameOver(title = 'GAME OVER') {
     this.hud.hideResult();
-    this.hud.showResult('over', 'GAME OVER', this.totalScore(), this.coinCount, false, `Stage ${this.stageIndex + 1} 다시 시작`);
+    this.hud.showResult('over', title, this.totalScore(), this.coinCount, false, `Stage ${this.stageIndex + 1} 다시 시작`);
     this.hud.setReward(null);
   }
 
@@ -759,6 +831,7 @@ export class GameScene extends Phaser.Scene {
     this.pads.update();
     const view = this.cameras.main.worldView;
     this.enemies.update(now, view, player.x, player.y, Math.abs(player.body.velocity.x));
+    if (this.updateMode(now, delta)) return;
     if (this.magnet) this.pullCoins();
     const sections = STAGES[this.stageIndex].sections;
     if (sections) {
