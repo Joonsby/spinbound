@@ -14,6 +14,8 @@ export type StageData = {
   // Generated stages: spawn and goal anywhere, and the highest point the camera may show.
   start?: { x: number; y: number };
   goal?: { x: number; y: number };
+  // Floor-level path from start to goal (turns included) for the progress bar.
+  route?: { x: number; y: number }[];
   top?: number;
   oneWayPlatforms?: [number, number, number, number][];
   enemyDetails?: { kind: EnemyKind; x: number; y: number; min: number; max: number }[];

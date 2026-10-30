@@ -5,6 +5,36 @@ const SPEED_STEPS = 24;
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
+// Matches the modal-out animation in style.css.
+export const MODAL_CLOSE_MS = 180;
+
+// Shows a modal overlay; calling it on an open one replays the entrance animation.
+function openModal(overlay: HTMLElement) {
+  overlay.classList.remove('modal-closing');
+  if (!overlay.hidden) {
+    overlay.hidden = true;
+    void overlay.offsetWidth;
+  }
+  overlay.hidden = false;
+}
+
+// Plays the exit animation, then hides; opening it again meanwhile keeps it shown.
+function closeModal(overlay: HTMLElement) {
+  if (overlay.hidden || overlay.classList.contains('modal-closing')) return;
+  overlay.classList.add('modal-closing');
+  window.setTimeout(() => {
+    if (!overlay.classList.contains('modal-closing')) return;
+    overlay.classList.remove('modal-closing');
+    overlay.hidden = true;
+  }, MODAL_CLOSE_MS);
+}
+
+// Instant hide for scene changes.
+function dropModal(overlay: HTMLElement) {
+  overlay.classList.remove('modal-closing');
+  overlay.hidden = true;
+}
+
 function stat(iconClass: string, label: string, value: number | string, unit: string) {
   const item = document.createElement('span');
   const mark = document.createElement('i');
@@ -28,6 +58,8 @@ export class Hud {
   private coinChip = element('.chip-coin');
   private stage = element('#stage-label');
   private speedHud = element('#speed-hud');
+  private progress = element('#run-progress');
+  private progressMarks = element('#run-progress .run-marks');
   private result = element('#result');
   private resultTitle = element('#result-title');
   private resultStats = element('#result-stats');
@@ -66,6 +98,8 @@ export class Hud {
   private shownRolling: boolean | undefined;
   private shownStatus = '';
   private shownHp = '';
+  private shownProgress = -1;
+  private shownReached = -2;
 
   constructor() {
     this.speedHud.style.setProperty('--roll-mark', String(PHYSICS.rollEnterSpeed / PHYSICS.boostSpeed));
@@ -102,6 +136,31 @@ export class Hud {
     this.coinChip.classList.toggle('magnet', magnet);
   }
 
+  // Checkpoint diamonds at their share of the route.
+  setProgressMarks(shares: number[]) {
+    this.progressMarks.replaceChildren(...shares.map((share) => {
+      const mark = document.createElement('i');
+      mark.style.setProperty('--at', share.toFixed(4));
+      return mark;
+    }));
+    this.shownProgress = -1;
+    this.shownReached = -2;
+  }
+
+  // share: 0–1 of the route; reached: index of the last checkpoint touched (-1 for none).
+  setProgress(share: number, reached: number) {
+    const step = Math.round(share * 400) / 400;
+    if (step !== this.shownProgress) {
+      this.shownProgress = step;
+      this.progress.style.setProperty('--progress', String(step));
+      this.progress.setAttribute('aria-valuenow', String(Math.round(step * 100)));
+    }
+    if (reached !== this.shownReached) {
+      this.shownReached = reached;
+      Array.from(this.progressMarks.children).forEach((mark, index) => mark.classList.toggle('reached', index <= reached));
+    }
+  }
+
   setSpeed(speed: number, rolling: boolean) {
     const step = Math.round(Math.min(1, speed / PHYSICS.boostSpeed) * SPEED_STEPS);
     if (step !== this.shownSpeed) {
@@ -120,7 +179,7 @@ export class Hud {
     this.resultStats.replaceChildren(stat('icon icon-star', '점수 ', score, '점'), stat('coin-icon', '코인 ', coins, '개'));
     this.nextButton.hidden = !showNext;
     this.restartButton.textContent = restartLabel;
-    this.result.hidden = false;
+    openModal(this.result);
     (showNext ? this.nextButton : this.restartButton).focus({ preventScroll: true });
   }
 
@@ -145,11 +204,11 @@ export class Hud {
     this.unlockPortrait.alt = character.name;
     this.unlockName.textContent = character.name;
     this.unlockMore.textContent = remaining > 1 ? `새 캐릭터 ${remaining - 1}개가 더 있어요` : '';
-    this.unlock.hidden = false;
+    openModal(this.unlock);
     this.unlockEquipButton.focus({ preventScroll: true });
   }
 
-  hideUnlock() { this.unlock.hidden = true; }
+  hideUnlock() { closeModal(this.unlock); }
 
   showRevive(cost: number, balance: number) {
     this.reviveCoinButton.textContent = `코인 ${cost}개로 부활`;
@@ -157,7 +216,7 @@ export class Hud {
     const note = document.createElement('span');
     note.textContent = '마지막 체크포인트에서 HP를 가득 채워 이어 해요';
     this.reviveInfo.replaceChildren(note, stat('coin-icon', '보유 ', balance, '개'));
-    this.revive.hidden = false;
+    openModal(this.revive);
     this.reviveAdButton.focus({ preventScroll: true });
   }
 
@@ -170,11 +229,13 @@ export class Hud {
       item.textContent = line;
       return item;
     }));
-    this.tip.hidden = false;
+    openModal(this.tip);
     this.tipButton.focus({ preventScroll: true });
   }
 
-  hideTip() { this.tip.hidden = true; }
+  hideTip() { closeModal(this.tip); }
+
+  hideRevive() { closeModal(this.revive); }
 
   // items: icon names of the active pre-stage items, shown together in one chip.
   showPause(stage: string, stats: { score: number; coins: number; hp: number; checkpoint: string; items: { icon: string; name: string }[] }) {
@@ -192,11 +253,11 @@ export class Hud {
     }
     this.togglePauseSettings(false);
     this.tipsResetButton.disabled = false;
-    this.pause.hidden = false;
+    openModal(this.pause);
     this.resumeButton.focus({ preventScroll: true });
   }
 
-  hidePause() { this.pause.hidden = true; }
+  hidePause() { closeModal(this.pause); }
 
   // Settings replace the stats so the card keeps its height on a phone held sideways.
   private togglePauseSettings(open: boolean) {
@@ -206,10 +267,7 @@ export class Hud {
   }
 
   hideResult() {
-    this.pause.hidden = true;
-    this.unlock.hidden = true;
-    this.result.hidden = true;
-    this.revive.hidden = true;
+    for (const overlay of [this.pause, this.unlock, this.result, this.revive]) dropModal(overlay);
     this.nextButton.hidden = true;
   }
 }

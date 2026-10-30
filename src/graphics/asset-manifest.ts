@@ -10,6 +10,8 @@ const part = (key: string, width: number, height: number, pivotX: number, pivotY
 export const ROBOT_PARTS = {
   head: part('robot-head', 42, 36, 18, 33, 'characters/robot/head.png'),
   fin: part('robot-fin', 16, 20, 8, 18, 'characters/robot/fin.png'),
+  // Headgear on top of the helmet (crown, bow, ...); transparent for robots without one.
+  crest: part('robot-crest', 32, 22, 16, 19, 'characters/robot/crest.png'),
   torso: part('robot-torso', 22, 18, 11, 9, 'characters/robot/torso.png'),
   arm: part('robot-arm', 12, 16, 6, 3, 'characters/robot/arm.png'),
   leg: part('robot-leg', 8, 10, 4, 1.5, 'characters/robot/leg.png'),
@@ -30,6 +32,7 @@ export const ROBOT_RIG = {
   eyes: { x: 9.5, y: -14.5 },
   finNear: { x: -9.5, y: -27, angle: -26 },
   finFar: { x: 7.5, y: -28.5, angle: 20, scale: 0.85 },
+  crest: { x: 2.5, y: -27.5 },
   torso: { x: 0, y: -18 },
   shoulderFront: { x: 8, y: -21 },
   shoulderBack: { x: -8, y: -21 },

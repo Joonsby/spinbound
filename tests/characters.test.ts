@@ -32,3 +32,8 @@ test('clearing a stage earns the robots for it and every earlier stage, never co
   assert.ok(afterWorld.includes('forge-knight') && afterWorld.includes('lime-06'));
   assert.ok(earnedCharacters(101).every((character) => character.unlock.kind !== 'coins'));
 });
+
+test('every robot has its own shape, not just its own colours', () => {
+  const shapes = CHARACTERS.map(({ look }) => JSON.stringify(Object.entries(look).sort()));
+  assert.equal(new Set(shapes).size, CHARACTERS.length);
+});

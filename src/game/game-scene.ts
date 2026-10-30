@@ -21,7 +21,7 @@ import { showRewardedAd } from '../ads';
 import { confirmDialog } from '../confirm-dialog';
 import { BOOSTS, COMBAT, ECONOMY, GIMMICK, HP_POINTS, PHYSICS } from './config';
 import { clearReward, reviveOffer, worldBonus } from './economy';
-import { STAGES_PER_WORLD, worldOf } from '../stage-gen';
+import { routeOf, routeProgress, STAGES_PER_WORLD, worldOf } from '../stage-gen';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
 import { InputController, type Control, type InputFrame } from './input';
 import { Player } from './player';
@@ -100,6 +100,9 @@ export class GameScene extends Phaser.Scene {
   private pads!: PadSystem;
   private platforms!: MovingPlatforms;
   private ropes: SwingRope[] = [];
+  private route: { x: number; y: number }[] = [];
+  // Feet height the last time the player stood on something; places them on a floor of the route.
+  private footY = 0;
   private theme!: StageTheme;
 
   init(data: SceneData = {}) {
@@ -155,6 +158,9 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(theme.sky[0]);
     document.body.dataset.theme = String(stage.theme);
     this.hud.setStage(this.stageIndex, STAGES.length);
+    this.route = routeOf(stage);
+    this.footY = spawn.y + 40;
+    this.hud.setProgressMarks((stage.checkpoints ?? [stage.checkpoint]).map((point) => routeProgress(this.route, point.x, point.y + 30)));
     this.hud.setStatus(`${stage.name} · ← → 이동 · 점프 · 두 번 톡톡 스핀 대시`);
     this.physics.resume();
     const worldTop = stage.top ?? 0;
@@ -569,8 +575,10 @@ export class GameScene extends Phaser.Scene {
     this.hitStopUntil = 0;
     this.resetInput();
     this.detachRopes();
-    if (cleared) this.player.stop();
-    else this.player.die();
+    if (cleared) {
+      this.player.stop();
+      this.hud.setProgress(1, this.lastCheckpoint);
+    } else this.player.die();
     this.physics.pause();
     this.audio.stopMusic();
     this.audio.play(cleared ? 'clear' : 'death');
@@ -684,7 +692,7 @@ export class GameScene extends Phaser.Scene {
   private revive() {
     if (!this.finished || this.hp > 0) return;
     this.resultTimer?.remove(false);
-    this.hud.hideResult();
+    this.hud.hideRevive();
     this.finished = false;
     this.hp = this.maxHp;
     this.updateScore();
@@ -818,6 +826,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.cameraControl.update(delta, vx, player.facing);
     this.hud.setSpeed(speed, player.rolling);
+    if (grounded) this.footY = player.body.bottom;
+    this.hud.setProgress(routeProgress(this.route, player.x, this.footY), this.lastCheckpoint);
   }
 
   private groundBelow(x: number, y: number) {

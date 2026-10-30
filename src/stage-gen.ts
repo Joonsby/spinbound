@@ -43,6 +43,8 @@ function seeded(seed: number) {
 class Builder {
   readonly stage: StageData;
   readonly checkpoints: { x: number; y: number }[] = [];
+  // Turns of the intended path between start and goal, at floor level.
+  readonly turns: { x: number; y: number }[] = [];
 
   readonly rand: () => number;
   readonly difficulty: number;
@@ -88,6 +90,7 @@ class Builder {
     }
   }
 
+  via(x: number, top: number) { this.turns.push({ x: Math.round(x), y: top }); }
   checkpoint(x: number, top: number) { this.checkpoints.push({ x: Math.round(x), y: top - 30 }); }
   sign(x: number, top: number, text: string) { this.stage.signs!.push({ x: Math.round(x), y: top - 100, text, floor: top }); }
 
@@ -194,6 +197,7 @@ class Builder {
     stage.top = Math.min(0, highestTop - 320);
     stage.checkpoints = this.checkpoints;
     stage.checkpoint = this.checkpoints[0] ?? { x: start.x, y: start.top - 30 };
+    stage.route = [{ x: start.x, y: start.top }, ...this.turns, { x: goal.x, y: goal.top }];
     return stage;
   }
 }
@@ -233,6 +237,7 @@ function backLayout(b: Builder) {
   // Mirroring already lists them from the new start (right) to the goal (left).
   stage.checkpoints = stage.checkpoints!.map((point) => ({ ...point, x: flip(point.x) }));
   stage.checkpoint = stage.checkpoints[0] ?? stage.checkpoint;
+  stage.route = stage.route!.map((point) => ({ ...point, x: flip(point.x) }));
   stage.start = { ...stage.start!, x: flip(stage.start!.x) };
   stage.goal = { ...stage.goal!, x: flip(stage.goal!.x) };
   stage.signs = [{ x: width - 300, y: GROUND - 100, text: '← 왼쪽으로!', floor: GROUND }];
@@ -262,7 +267,12 @@ function climbLayout(b: Builder) {
       b.sign(dir === 1 ? left + 220 : right - 220, top, dir === 1 ? '→' : '←');
     }
     if (last) goal = { x: dir === 1 ? width - 130 : 130, top };
-    else b.connectUp(dir === 1 ? width - SHAFT : SHAFT, top, dir);
+    else {
+      const edge = dir === 1 ? width - SHAFT : SHAFT;
+      b.connectUp(edge, top, dir);
+      b.via(edge + dir * 120, top);
+      b.via(edge + dir * 120, top - STEP);
+    }
   }
   return b.finish({ x: 90, top: GROUND }, goal, GROUND - STEP * floors);
 }
@@ -285,7 +295,12 @@ function descentLayout(b: Builder) {
     const gaps = b.run(from, to, top, { pits: k === 0, boosts: false, ropes: false, headroom: first ? 600 : 210, rests: [] });
     b.floor(left, right, top, gaps);
     if (!first) b.checkpoint(dir === -1 ? width - SHAFT - 40 : SHAFT + 40, top);
-    if (k > 0) b.sign(dir === 1 ? width - SHAFT - 90 : SHAFT + 90, top, '↓ 아래로!');
+    if (k > 0) {
+      b.sign(dir === 1 ? width - SHAFT - 90 : SHAFT + 90, top, '↓ 아래로!');
+      const drop = dir === 1 ? width - SHAFT / 2 : SHAFT / 2;
+      b.via(drop, top);
+      b.via(drop, top + STEP);
+    }
     if (k === 0) goal = { x: dir === 1 ? width - 130 : 130, top };
   }
   return b.finish({ x: 90, top: GROUND - STEP * floors }, goal, GROUND - STEP * floors);
@@ -306,6 +321,7 @@ function bridgeLayout(b: Builder) {
   b.stage.platforms.push([wall, (high + THICK + GROUND) / 2, 80, GROUND - high - THICK]);
   b.coinLine(bridgeLeft + 80, wall - 120, GROUND - 40, 90);
   b.connectUp(bridgeLeft, GROUND, -1, bridgeLeft - SHAFT - 70);
+  for (const [x, top] of [[bridgeLeft - 120, GROUND], [bridgeLeft - 120, high], [bridgeRight + 60, high], [bridgeRight + 60, GROUND]]) b.via(x, top);
   const bridgeGaps = b.run(bridgeLeft + 280, bridgeRight - 150, high, { pits: true, boosts: false, ropes: false, headroom: 600, rests: restsBetween(bridgeLeft, bridgeRight) });
   b.floor(bridgeLeft, bridgeRight, high, bridgeGaps);
   b.checkpoint(bridgeLeft + 150, high);
@@ -351,6 +367,38 @@ export function extendStage(stage: StageData, slot: number): StageData {
     ropes: [...(stage.ropes ?? []), ...tail.ropes!],
     checkpoints: [...(stage.checkpoints ?? [stage.checkpoint]), ...b.checkpoints],
   };
+}
+
+type Point = { x: number; y: number };
+
+// Path from start to goal at floor level; hand-made stages run straight to the right.
+export function routeOf(stage: StageData): Point[] {
+  return stage.route ?? [{ x: stage.start?.x ?? 90, y: 0 }, { x: stage.goal?.x ?? stage.width - 130, y: 0 }];
+}
+
+// Share (0–1) of the route covered by a player at x whose feet were last on the ground at footY.
+// The player is on the nearest route floor at or below their feet (ledges and jumps never count as
+// the floor above); x is projected onto that floor. Connectors between floors are passed, not stood on.
+export function routeProgress(route: Point[], x: number, footY: number) {
+  const lengths = route.slice(1).map((point, i) => Math.hypot(point.x - route[i].x, point.y - route[i].y));
+  const total = lengths.reduce((sum, length) => sum + length, 0) || 1;
+  let best: { index: number; t: number; floor: number; below: boolean; dx: number } | undefined;
+  for (let i = 0; i < lengths.length; i++) {
+    const [a, b] = [route[i], route[i + 1]];
+    if (a.y !== b.y) continue;
+    const [lo, hi] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
+    const candidate = {
+      index: i, t: a.x === b.x ? 1 : Math.min(1, Math.max(0, (x - a.x) / (b.x - a.x))), floor: a.y,
+      below: a.y >= footY - 40, dx: x < lo ? lo - x : x > hi ? x - hi : 0,
+    };
+    const better = !best || (candidate.below !== best.below ? candidate.below
+      : candidate.floor !== best.floor ? (candidate.below ? candidate.floor < best.floor : candidate.floor > best.floor)
+      : candidate.dx < best.dx);
+    if (better) best = candidate;
+  }
+  if (!best) return 0;
+  const before = lengths.slice(0, best.index).reduce((sum, length) => sum + length, 0);
+  return Math.min(1, (before + best.t * lengths[best.index]) / total);
 }
 
 export const worldOf = (stageIndex: number) => Math.floor(stageIndex / STAGES_PER_WORLD) + 1;

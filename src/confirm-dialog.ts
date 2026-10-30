@@ -1,3 +1,5 @@
+import { MODAL_CLOSE_MS } from './game/hud';
+
 // Yes/no card over everything else (pause menu included). Resolves true only on the confirm button;
 // cancel, Escape or a tap outside the card resolve false. Focus starts on cancel, the safe choice.
 export function confirmDialog(options: { title: string; message: string; confirm: string; cancel?: string }): Promise<boolean> {
@@ -17,8 +19,10 @@ export function confirmDialog(options: { title: string; message: string; confirm
     ok.textContent = options.confirm;
     overlay.setAttribute('aria-label', options.title);
     const close = (answer: boolean) => {
+      if (overlay.classList.contains('modal-closing')) return;
       window.removeEventListener('keydown', onKey, true);
-      overlay.remove();
+      overlay.classList.add('modal-closing');
+      window.setTimeout(() => overlay.remove(), MODAL_CLOSE_MS);
       resolve(answer);
     };
     // Capture phase, so the game's own Escape/P handling never sees these keys.

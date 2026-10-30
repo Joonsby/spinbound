@@ -102,6 +102,7 @@ export class RobotRig {
     this.body.add(this.headGroup);
     this.finFar = this.part(ROBOT_PARTS.fin, rig.finFar, this.headGroup, rig.finFar.scale, 0xd8cfd8);
     this.head = this.part(ROBOT_PARTS.head, { x: 0, y: 0 }, this.headGroup);
+    this.part(ROBOT_PARTS.crest, rig.crest, this.headGroup);
     this.eyes = this.part(eyesPart('normal'), rig.eyes, this.headGroup);
     this.finNear = this.part(ROBOT_PARTS.fin, rig.finNear, this.headGroup);
     this.armFront = this.part(ROBOT_PARTS.arm, rig.shoulderFront, this.body);

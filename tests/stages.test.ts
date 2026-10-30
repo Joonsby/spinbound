@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PHYSICS } from '../src/game/config.ts';
 import { GROUND_TOP, STAGES, type StageData } from '../src/stages.ts';
+import { routeOf, routeProgress } from '../src/stage-gen.ts';
 
 // Horizontal distance of a full jump at plain run speed, minus a safety margin.
 const JUMP_REACH = PHYSICS.runSpeed * (2 * PHYSICS.jumpSpeed / PHYSICS.gravity) - 20;
@@ -220,4 +221,42 @@ test('stage 1 is a short session: at most ~12k px with checkpoints every ≤ 3k 
   assert.ok(stage.width <= 12000);
   const xs = [0, ...(stage.checkpoints ?? []).map((point) => point.x), stage.width];
   for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] <= 4800, `gap ${xs[i - 1]}–${xs[i]}`);
+});
+
+test('progress runs from 0 at the start to 1 at the goal and never drops along the route', () => {
+  for (const [index, stage] of STAGES.entries()) {
+    const route = routeOf(stage);
+    let last = -1;
+    for (let i = 1; i < route.length; i++) {
+      const [a, b] = [route[i - 1], route[i]];
+      if (a.y !== b.y) continue;
+      for (let step = 0; step <= 20; step++) {
+        const share = routeProgress(route, a.x + (b.x - a.x) * step / 20, a.y);
+        assert.ok(share >= last - 1e-9, `stage ${index + 1}: progress fell to ${share} on leg ${i}`);
+        last = share;
+      }
+    }
+    assert.equal(routeProgress(route, route[0].x, route[0].y), 0, `stage ${index + 1} start`);
+    assert.ok(routeProgress(route, route.at(-1)!.x, route.at(-1)!.y) > 0.999, `stage ${index + 1} goal`);
+  }
+});
+
+test('standing on a ledge or stair never counts as the floor above', () => {
+  for (const [index, stage] of STAGES.entries()) {
+    const route = routeOf(stage);
+    for (let i = 1; i < route.length; i++) {
+      const [a, b] = [route[i - 1], route[i]];
+      if (a.y !== b.y) continue;
+      const x = (a.x + b.x) / 2;
+      assert.equal(routeProgress(route, x, a.y - 160), routeProgress(route, x, a.y), `stage ${index + 1} leg ${i}`);
+    }
+  }
+});
+
+test('checkpoints sit on the route in the order they are reached', () => {
+  for (const [index, stage] of STAGES.entries()) {
+    const route = routeOf(stage);
+    const shares = (stage.checkpoints ?? [stage.checkpoint]).map((point) => routeProgress(route, point.x, point.y + 30));
+    assert.ok(shares.every((share, i) => i === 0 || share > shares[i - 1]), `stage ${index + 1}: ${shares.map((share) => share.toFixed(2))}`);
+  }
 });
