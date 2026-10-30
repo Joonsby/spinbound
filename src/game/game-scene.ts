@@ -21,13 +21,13 @@ import { showRewardedAd } from '../ads';
 import { confirmDialog } from '../confirm-dialog';
 import { BOOSTS, COMBAT, ECONOMY, GIMMICK, HP_POINTS, PHYSICS } from './config';
 import { clearReward, reviveOffer, worldBonus } from './economy';
-import { routeOf, routeProgress, STAGES_PER_WORLD, worldOf } from '../stage-gen';
+import { routeOf, routeProgress, routeSpot, STAGES_PER_WORLD, worldOf } from '../stage-gen';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
 import { InputController, type Control, type InputFrame } from './input';
 import { Player } from './player';
 import { RobotRig } from '../graphics/robot-rig';
 import { createRobotArt } from '../graphics/robot-art';
-import { RENDER_SCALE_EVENT } from '../graphics/display';
+import { LOGICAL_HEIGHT, RENDER_SCALE_EVENT } from '../graphics/display';
 import { EnemySystem, type EnemyConfig } from './enemies';
 import { VisualSync } from './visual-sync';
 import { Hud } from './hud';
@@ -251,7 +251,11 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.existing(rect, true);
       group.add(rect);
     };
-    stage.platforms.forEach((platform) => block(platform, solid));
+    // Land hanging in the air is jumped through from below; ground and anything standing on it stay solid.
+    const rects = stage.platforms.map(toRect);
+    const floating = (rect: ReturnType<typeof toRect>) => rect.bottom < LOGICAL_HEIGHT
+      && !rects.some((other) => other !== rect && Math.abs(other.top - rect.bottom) < 1 && other.left < rect.right && other.right > rect.left);
+    stage.platforms.forEach((platform, index) => block(platform, floating(rects[index]) ? oneWay : solid));
     stage.oneWayPlatforms?.forEach((platform) => block(platform, oneWay));
     const avoid = [...stage.spikes, ...(stage.traps ?? []).map(([x]) => x), ...stage.pads.map(([x]) => x), ...(stage.walls ?? []).map((wall) => wall.x)];
     buildTerrain(this, theme, stage.platforms.map(toRect), (stage.oneWayPlatforms ?? []).map(toRect), avoid);
@@ -824,10 +828,12 @@ export class GameScene extends Phaser.Scene {
       if (skidding) this.effects.skid(player.x, player.body.bottom, direction, now);
       if (player.isBoosted(now)) this.effects.boostStreaks(player.x, player.y, direction, now);
     }
+    if (grounded) this.footY = player.body.bottom;
+    const spot = routeSpot(this.route, player.x, this.footY);
+    this.cameraControl.setFloor(spot.floor);
     this.cameraControl.update(delta, vx, player.facing);
     this.hud.setSpeed(speed, player.rolling);
-    if (grounded) this.footY = player.body.bottom;
-    this.hud.setProgress(routeProgress(this.route, player.x, this.footY), this.lastCheckpoint);
+    this.hud.setProgress(spot.share, this.lastCheckpoint);
   }
 
   private groundBelow(x: number, y: number) {

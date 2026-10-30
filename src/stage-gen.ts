@@ -163,7 +163,8 @@ class Builder {
         stage.ropes!.push({ x: c, y: top - 350, length: 230 });
         this.coinArc(c, top - 140, 260, 40, 4);
       }
-      x = c + half + Math.round(this.between(150, 260) * (1 - 0.35 * d));
+      // Room to land and set up the next jump, even at the hardest difficulty.
+      x = c + half + Math.round(this.between(190, 290) * (1 - 0.2 * d));
     }
     return gaps;
   }
@@ -369,17 +370,68 @@ export function extendStage(stage: StageData, slot: number): StageData {
   };
 }
 
+// Clear ground kept around hazards so dodging one never drops the player into the next.
+const PIT_MARGIN = 160;
+const BLOCK_BEFORE = 150;
+const BLOCK_AFTER = 140;
+const LANDING = 120;
+
+// Removes hazards that leave no fair way through: spikes at a pit's edge, spikes under or right
+// against a block, and walkers pacing the edge where a pit jump lands. Runs on every stage.
+export function makeFair(stage: StageData): StageData {
+  const rects = stage.platforms.map(([x, y, width, height]) => ({ left: x - width / 2, right: x + width / 2, top: y - height / 2, bottom: y + height / 2 }));
+  const isFloor = (rect: typeof rects[number]) => rect.right - rect.left >= 300 || rect.bottom >= 600;
+  const blocks = rects.filter((rect) => !isFloor(rect));
+  const pits: { left: number; right: number; top: number }[] = [];
+  const levels = new Map<number, typeof rects>();
+  for (const rect of rects.filter(isFloor)) levels.set(rect.top, [...(levels.get(rect.top) ?? []), rect]);
+  for (const [top, pieces] of levels) {
+    pieces.sort((a, b) => a.left - b.left);
+    for (let i = 1; i < pieces.length; i++) if (pieces[i].left - pieces[i - 1].right > 1) pits.push({ left: pieces[i - 1].right, right: pieces[i].left, top });
+  }
+  const sameLevel = (a: number, b: number) => Math.abs(a - b) < 5;
+  const fair = (x: number, top: number) =>
+    !pits.some((pit) => sameLevel(pit.top, top) && x > pit.left - PIT_MARGIN && x < pit.right + PIT_MARGIN)
+    && !blocks.some((block) => block.top < top && block.top > top - 260 && x > block.left - BLOCK_BEFORE && x < block.right + BLOCK_AFTER);
+  // Walkers keep their distance from the landing side of every pit on their level.
+  const trim = (x: number, top: number, min: number, max: number) => {
+    for (const pit of pits) {
+      if (!sameLevel(pit.top, top) || max < pit.left - LANDING || min > pit.right + LANDING) continue;
+      if (x < pit.left) max = Math.min(max, pit.left - LANDING);
+      else min = Math.max(min, pit.right + LANDING);
+    }
+    return max - min >= 40 ? { x: Math.min(max, Math.max(min, x)), min, max } : undefined;
+  };
+  return {
+    ...stage,
+    spikes: stage.spikes.filter((x) => fair(x, GROUND)),
+    traps: stage.traps?.filter(([x, y]) => fair(x, y + 15)),
+    enemies: stage.enemies.flatMap(([min, max]) => {
+      const kept = trim((min + max) / 2, GROUND, min, max);
+      return kept ? [[kept.min, kept.max] as [number, number]] : [];
+    }),
+    enemyDetails: stage.enemyDetails?.flatMap((enemy) => {
+      if (enemy.kind === 'fly') return [enemy];
+      const kept = trim(enemy.x, enemy.y + 18, enemy.min, enemy.max);
+      return kept ? [{ ...enemy, ...kept }] : [];
+    }),
+  };
+}
+
 type Point = { x: number; y: number };
 
 // Path from start to goal at floor level; hand-made stages run straight to the right.
 export function routeOf(stage: StageData): Point[] {
-  return stage.route ?? [{ x: stage.start?.x ?? 90, y: 0 }, { x: stage.goal?.x ?? stage.width - 130, y: 0 }];
+  return stage.route ?? [{ x: stage.start?.x ?? 90, y: GROUND }, { x: stage.goal?.x ?? stage.width - 130, y: GROUND }];
 }
 
 // Share (0–1) of the route covered by a player at x whose feet were last on the ground at footY.
 // The player is on the nearest route floor at or below their feet (ledges and jumps never count as
 // the floor above); x is projected onto that floor. Connectors between floors are passed, not stood on.
-export function routeProgress(route: Point[], x: number, footY: number) {
+export function routeProgress(route: Point[], x: number, footY: number) { return routeSpot(route, x, footY).share; }
+
+// Route share plus the top of the floor the player is on.
+export function routeSpot(route: Point[], x: number, footY: number) {
   const lengths = route.slice(1).map((point, i) => Math.hypot(point.x - route[i].x, point.y - route[i].y));
   const total = lengths.reduce((sum, length) => sum + length, 0) || 1;
   let best: { index: number; t: number; floor: number; below: boolean; dx: number } | undefined;
@@ -396,9 +448,9 @@ export function routeProgress(route: Point[], x: number, footY: number) {
       : candidate.dx < best.dx);
     if (better) best = candidate;
   }
-  if (!best) return 0;
+  if (!best) return { share: 0, floor: route[0]?.y ?? GROUND };
   const before = lengths.slice(0, best.index).reduce((sum, length) => sum + length, 0);
-  return Math.min(1, (before + best.t * lengths[best.index]) / total);
+  return { share: Math.min(1, (before + best.t * lengths[best.index]) / total), floor: best.floor };
 }
 
 export const worldOf = (stageIndex: number) => Math.floor(stageIndex / STAGES_PER_WORLD) + 1;
