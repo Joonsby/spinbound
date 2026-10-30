@@ -71,10 +71,10 @@ export type CombatTuning = typeof COMBAT;
 export const ECONOMY = {
   // Added to the coins picked up in a cleared stage.
   clearBonus: 20,
-  reviveCost: 50,
+  reviveCost: 300,
   // First clear of a world's last stage, growing per world; comes with one of every item.
-  worldBonus: 300,
-  worldBonusPerWorld: 100,
+  worldBonus: 500,
+  worldBonusPerWorld: 150,
   // Clear reward multiplier on dragon, pursuit and time attack stages.
   modeBonus: 1.5,
 };
@@ -82,9 +82,9 @@ export type EconomyTuning = typeof ECONOMY;
 
 // Permanent coin upgrades (강화 menu): each level adds `step`; costs[i] buys level i + 1.
 export const UPGRADES = {
-  attack: { base: 10, step: 2, costs: [100, 150, 220, 320, 450, 600, 800, 1050, 1350, 1700] },
-  defense: { base: 0, step: 5, costs: [150, 250, 380, 550, 750, 1000, 1300, 1650] },
-  maxHp: { base: 3, step: 1, costs: [300, 700, 1500] },
+  attack: { base: 10, step: 2, costs: [400, 600, 900, 1300, 1800, 2400, 3200, 4200, 5400, 6800] },
+  defense: { base: 0, step: 5, costs: [600, 1000, 1500, 2200, 3000, 4000, 5200, 6600] },
+  maxHp: { base: 3, step: 1, costs: [1200, 2800, 6000] },
 };
 export type UpgradeRule = { base: number; step: number; costs: number[] };
 export type StatKey = keyof typeof UPGRADES;

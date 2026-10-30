@@ -16,6 +16,8 @@ import { unbakeAll } from './graphics/art';
 import { APPLY_DISPLAY_EVENT } from './graphics/display';
 import { cloudSaveStatusText, syncCloudSaveNow } from './cloud-save';
 import { resetTips } from './game/tutorial';
+import { canClaim, dayKey } from './attendance';
+import { openAttendance } from './attendance-modal';
 
 type Screen = 'stages' | 'prepare' | 'stats' | 'characters' | 'inventory' | 'settings';
 // HP and score carried into the next stage of a run.
@@ -26,14 +28,17 @@ const icon = (name: string) => `<i class="icon icon-${name}" aria-hidden="true">
 const coin = '<i class="coin-icon" aria-hidden="true"></i>';
 const ITEM_ICONS: Record<ItemId, string> = { shield: 'shield', 'extra-heart': 'heart', magnet: 'magnet' };
 
-function mount(scene: Phaser.Scene, title: string, content: string, action: (button: HTMLButtonElement) => void) {
+// The attendance card opens by itself once per app session while today's reward waits.
+let attendanceShown = false;
+
+function mount(scene: Phaser.Scene, title: string, content: string, action: (button: HTMLButtonElement) => void, topActions = '') {
   document.body.dataset.screen = document.documentElement.dataset.screen = 'menu';
   // Menus use the default panel colours, not the last stage's theme.
   delete document.body.dataset.theme;
   document.body.style.removeProperty('--accent');
   scene.cameras.main.setBackgroundColor('#1d2a44');
   const root = document.createElement('section'); root.id = 'menu-root'; root.setAttribute('aria-label', title);
-  root.innerHTML = `<div class="menu-shell"><header class="menu-heading"><h1>${title}</h1><div class="menu-top-actions"><button type="button" data-action="home">${icon('home')}메인 로비</button></div></header><div class="menu-content">${content}</div></div>`;
+  root.innerHTML = `<div class="menu-shell"><header class="menu-heading"><h1>${title}</h1><div class="menu-top-actions">${topActions}<button type="button" data-action="home">${icon('home')}메인 로비</button></div></header><div class="menu-content">${content}</div></div>`;
   document.body.append(root);
   const click = (event: MouseEvent) => {
     const button = (event.target as Element).closest<HTMLButtonElement>('button');
@@ -69,7 +74,9 @@ function characterCard(character: Character, confirming: string) {
   if (equipped) action = '<button disabled>장착 중</button>';
   else if (owned) action = `<button data-robot="${id}">장착</button>`;
   else if (unlock.kind === 'coins') action = `<button data-buy-robot="${id}" aria-label="${name} 코인 ${unlock.price}개로 구매" ${player.currency < unlock.price ? 'disabled' : ''}>${confirming === id ? '한 번 더 누르면 구매' : `${coin}${unlock.price}`}</button>`;
-  else action = unlock.kind === 'world'
+  else action = unlock.kind === 'attendance'
+    ? `<button disabled aria-label="출석 ${unlock.days}일 달성 시 지급">${icon('calendar')}출석 ${unlock.days}일</button>`
+    : unlock.kind === 'world'
     ? `<button disabled aria-label="월드 ${unlock.world} 클리어로 해금">${icon('lock')}월드 ${unlock.world}</button>`
     : `<button disabled aria-label="스테이지 ${unlockStage(unlock)} 클리어로 해금">${icon('lock')}STAGE ${unlockStage(unlock)}</button>`;
   return `<article class="char-card${owned ? '' : ' locked'}${equipped ? ' equipped' : ''}" data-rarity="${rarity}"><span class="rarity-badge">${RARITY_LABELS[rarity]}</span><img class="char-portrait" src="${robotPortraitUrl(character)}" alt=""><h3>${name}</h3>${action}</article>`;
@@ -146,10 +153,17 @@ export class MainMenuScene extends Phaser.Scene {
     const player = getPlayerProgress();
     const robot = getEquippedRobot();
     const unlocked = Math.min(player.unlockedStage, STAGES.length);
+    const claimable = canClaim(player.attendance, dayKey());
+    const attendance = () => openAttendance((claimed) => { if (claimed) this.scene.restart(); });
     mount(this, '메인 로비', `<div class="lobby-hero"><div class="logo"><p class="logo-title"><span>SPIN</span>BOUND</p><p class="logo-tagline">달리고, 구르고, 더 멀리!</p></div><article class="robot-card">${robotImage(this)}<h2>${robot.name}</h2><p class="chips"><span class="chip">레벨 ${player.level}</span><span class="chip"><i class="coin-icon" aria-hidden="true"></i>코인 ${player.currency}</span><span class="chip">${icon('flag')}${unlocked} / ${STAGES.length}</span></p></article></div><div class="menu-grid"><button data-screen="stages" class="menu-primary">${icon('play')}게임 시작</button><button data-screen="stats">${icon('upgrade')}강화</button><button data-screen="characters">${icon('robot')}캐릭터</button><button data-screen="inventory">${icon('box')}보관함</button><button data-screen="settings">${icon('settings')}설정</button></div>`, (button) => {
+      if (button.dataset.attendance !== undefined) { attendance(); return; }
       const screen = button.dataset.screen;
       if (screen) this.scene.start('MenuScreenScene', { screen });
-    });
+    }, `<button type="button" data-attendance>${icon('calendar')}출석${claimable ? '<span class="notify-dot" aria-label="받을 보상 있음"></span>' : ''}</button>`);
+    if (claimable && !attendanceShown) {
+      attendanceShown = true;
+      attendance();
+    }
   }
 }
 

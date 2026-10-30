@@ -6,7 +6,7 @@ import type { PlayerProgress } from '../src/progress.ts';
 const base = (): PlayerProgress => ({
   version: 1, level: 1, currency: 0, stats: { attack: 10, defense: 0, maxHp: 3, maxEnergy: 100 },
   ownedCharacters: ['orange-01'], equippedCharacter: 'orange-01', unlockedStage: 1, items: [],
-  soundEnabled: true, graphicsQuality: 'auto',
+  soundEnabled: true, graphicsQuality: 'auto', attendance: { last: '', days: 0 },
 });
 
 test('progress made on two devices is kept from both', () => {
@@ -26,4 +26,11 @@ test('device settings are not synced and stay local', () => {
   const merged = mergeProgress(local, toSynced(remote));
   assert.deepEqual([merged.soundEnabled, merged.graphicsQuality], [false, 'low']);
   assert.equal(sameProgress(local, remote), true);
+});
+
+test('attendance keeps the copy with more days claimed', () => {
+  const phone = { ...base(), attendance: { last: '2026-10-30', days: 9 } };
+  const tablet = { ...base(), attendance: { last: '2026-10-28', days: 7 } };
+  assert.deepEqual(mergeProgress(tablet, toSynced(phone)).attendance, phone.attendance);
+  assert.deepEqual(mergeProgress(phone, toSynced(tablet)).attendance, phone.attendance);
 });

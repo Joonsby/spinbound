@@ -2,13 +2,14 @@ import type { QualitySetting } from './graphics/quality';
 import { buyItem as payForItem, buyUpgrade, takeItems } from './game/economy';
 import { HP_POINTS, UPGRADES, type StatKey } from './game/config';
 import { CHARACTERS, DEFAULT_CHARACTER, characterById, earnedCharacters, type Character } from './characters';
+import { canClaim, nextReward, type Attendance } from './attendance';
 
 const QUALITY_SETTINGS: QualitySetting[] = ['auto', 'low', 'medium', 'high'];
 // Single-stage items bought with coins before a stage; each start uses one of every chosen item.
 export const ITEMS = {
-  shield: { name: '보호막', description: '첫 피격 1회 방어', price: 30 },
-  'extra-heart': { name: '체력 보강', description: `최대 HP +${HP_POINTS}`, price: 40 },
-  magnet: { name: '코인 자석', description: '코인 끌어오기', price: 25 },
+  shield: { name: '보호막', description: '첫 피격 1회 방어', price: 150 },
+  'extra-heart': { name: '체력 보강', description: `최대 HP +${HP_POINTS}`, price: 200 },
+  magnet: { name: '코인 자석', description: '코인 끌어오기', price: 120 },
 } as const;
 export type ItemId = keyof typeof ITEMS;
 export const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
@@ -24,10 +25,12 @@ export type PlayerProgress = {
   items: string[];
   soundEnabled: boolean;
   graphicsQuality: QualitySetting;
+  // Last claimed day (YYYY-MM-DD, local) and the total number of days claimed.
+  attendance: Attendance;
 };
 const KEY = 'sprout-hop:player-progress:v1';
 let progress: PlayerProgress | undefined;
-const defaults = (): PlayerProgress => ({ version: 1, level: 1, currency: 0, stats: { attack: 10, defense: 0, maxHp: 3, maxEnergy: 100 }, ownedCharacters: [DEFAULT_CHARACTER.id], equippedCharacter: DEFAULT_CHARACTER.id, unlockedStage: 1, items: [], soundEnabled: true, graphicsQuality: 'auto' });
+const defaults = (): PlayerProgress => ({ version: 1, level: 1, currency: 0, stats: { attack: 10, defense: 0, maxHp: 3, maxEnergy: 100 }, ownedCharacters: [DEFAULT_CHARACTER.id], equippedCharacter: DEFAULT_CHARACTER.id, unlockedStage: 1, items: [], soundEnabled: true, graphicsQuality: 'auto', attendance: { last: '', days: 0 } });
 const number = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.floor(value))) : fallback;
 function recover(value: unknown): PlayerProgress {
   const base = defaults();
@@ -44,6 +47,10 @@ function recover(value: unknown): PlayerProgress {
     items: Array.isArray(data.items) ? data.items.filter((item): item is string => typeof item === 'string' && Object.hasOwnProperty.call(ITEMS, item)).slice(0, 500) : [],
     soundEnabled: typeof data.soundEnabled === 'boolean' ? data.soundEnabled : true,
     graphicsQuality: QUALITY_SETTINGS.includes(data.graphicsQuality as QualitySetting) ? data.graphicsQuality as QualitySetting : 'auto',
+    attendance: {
+      last: typeof data.attendance?.last === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.attendance.last) ? data.attendance.last : '',
+      days: number(data.attendance?.days, 0, 0, 100000),
+    },
   };
 }
 // Validates progress from outside the game (the cloud copy); bad fields fall back to defaults.
@@ -82,6 +89,20 @@ export function buyItem(id: ItemId) {
   if (!payForItem(data, id, ITEMS[id].price)) return false;
   savePlayerProgress(data);
   return true;
+}
+// Today's attendance, once per day: the weekly reward, plus a robot on a milestone day.
+export function claimAttendance(today: string) {
+  const data = getPlayerProgress();
+  if (!canClaim(data.attendance, today)) return null;
+  const reward = nextReward(data.attendance.days);
+  const days = data.attendance.days + 1;
+  const robot = CHARACTERS.find(({ id, unlock }) => unlock.kind === 'attendance' && unlock.days === days && !data.ownedCharacters.includes(id));
+  data.currency += reward.coins;
+  data.items.push(...reward.items);
+  if (robot) data.ownedCharacters.push(robot.id);
+  data.attendance = { last: today, days };
+  savePlayerProgress(data);
+  return { reward, robot, days };
 }
 export function addItems(ids: readonly ItemId[]) {
   const data = getPlayerProgress();

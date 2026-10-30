@@ -12,6 +12,7 @@ export const toSynced = (value: PlayerProgress): SyncedProgress => ({
   equippedCharacter: value.equippedCharacter,
   unlockedStage: value.unlockedStage,
   items: value.items,
+  attendance: value.attendance,
 });
 
 export const sameProgress = (a: PlayerProgress, b: PlayerProgress) => JSON.stringify(toSynced(a)) === JSON.stringify(toSynced(b));
@@ -42,5 +43,6 @@ export function mergeProgress(local: PlayerProgress, remote: SyncedProgress): Pl
     equippedCharacter: ownedCharacters.includes(local.equippedCharacter) ? local.equippedCharacter : remote.equippedCharacter,
     unlockedStage: Math.max(local.unlockedStage, remote.unlockedStage),
     items: mergeItems(local.items, remote.items),
+    attendance: remote.attendance && remote.attendance.days > local.attendance.days ? remote.attendance : local.attendance,
   };
 }

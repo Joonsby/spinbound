@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import { CHARACTERS, earnedCharacters, unlockStage } from '../src/characters.ts';
 import { STAGES } from '../src/stages.ts';
 
-test('40 robots with unique ids and every rarity', () => {
-  assert.equal(CHARACTERS.length, 40);
-  assert.equal(new Set(CHARACTERS.map((character) => character.id)).size, 40);
+test('43 robots with unique ids and every rarity', () => {
+  assert.equal(CHARACTERS.length, 43);
+  assert.equal(new Set(CHARACTERS.map((character) => character.id)).size, 43);
   for (const rarity of ['common', 'rare', 'epic', 'legendary']) assert.ok(CHARACTERS.some((character) => character.rarity === rarity), rarity);
 });
 
 test('commons come from clears, epics from worlds, rares and legendaries from coins', () => {
   for (const { id, rarity, unlock } of CHARACTERS) {
-    if (unlock.kind === 'start') continue;
+    if (unlock.kind === 'start' || unlock.kind === 'attendance') continue;
     const expected = { common: 'clear', rare: 'coins', epic: 'world', legendary: 'coins' }[rarity];
     assert.equal(unlock.kind, expected, id);
     if (unlock.kind === 'clear') assert.ok(unlock.stage >= 1 && unlock.stage <= STAGES.length, id);
@@ -36,4 +36,9 @@ test('clearing a stage earns the robots for it and every earlier stage, never co
 test('every robot has its own shape, not just its own colours', () => {
   const shapes = CHARACTERS.map(({ look }) => JSON.stringify(Object.entries(look).sort()));
   assert.equal(new Set(shapes).size, CHARACTERS.length);
+});
+
+test('attendance hands out a robot at 7, 14 and 28 days', () => {
+  const days = CHARACTERS.flatMap(({ unlock }) => unlock.kind === 'attendance' ? [unlock.days] : []);
+  assert.deepEqual(days.sort((a, b) => a - b), [7, 14, 28]);
 });
