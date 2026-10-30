@@ -3,6 +3,7 @@ import { COMBAT, PHYSICS } from './config';
 import { MonsterHealthBar } from '../health-bar';
 import type { EnemyKind } from '../stages';
 import { EnemyVisual } from '../graphics/enemy-art';
+import { speciesFor } from '../graphics/monster-art';
 
 export type EnemyConfig = { kind: EnemyKind; x: number; y: number; min: number; max: number };
 
@@ -28,22 +29,26 @@ export type Enemy = {
 
 export type DamageResult = 'defeated' | 'hit' | 'ignored';
 
-// Spawning, patrol/fly/charger AI and defeat handling. Contact rules live in contact.ts.
+// Spawning, patrol/fly/charger/hopper AI and defeat handling. Contact rules live in contact.ts.
+// The world picks which monsters play each behaviour (monster-art.ts).
 export class EnemySystem {
   readonly group: Phaser.Physics.Arcade.Group;
   readonly list: Enemy[] = [];
   private byObject = new Map<Phaser.GameObjects.GameObject, Enemy>();
 
-  constructor(scene: Phaser.Scene, configs: EnemyConfig[], private onScreenGrace: boolean) {
+  constructor(scene: Phaser.Scene, configs: EnemyConfig[], private onScreenGrace: boolean, world: number) {
     this.group = scene.physics.add.group({ allowGravity: false });
+    const counts: Partial<Record<EnemyKind, number>> = {};
     for (const { kind, x, y, min, max } of configs) {
+      const index = counts[kind] ?? 0;
+      counts[kind] = index + 1;
       // Invisible hitbox; EnemyVisual draws the monster.
       const sprite = scene.add.rectangle(x, y, 34, 36, 0xd783ff, 0);
       scene.physics.add.existing(sprite);
       this.group.add(sprite);
       const body = sprite.body as Phaser.Physics.Arcade.Body;
-      body.setAllowGravity(false).setVelocityX(kind === 'charger' ? 0 : COMBAT.enemySpeed);
-      const visual = new EnemyVisual(scene, kind, x, y + 18);
+      body.setAllowGravity(false).setVelocityX(kind === 'charger' || kind === 'hopper' ? 0 : COMBAT.enemySpeed);
+      const visual = new EnemyVisual(scene, kind, speciesFor(kind, world, index), x, y + 18);
       const maxHp = COMBAT.enemyHp[kind];
       const enemy: Enemy = {
         kind, sprite, body, visual, min, max, baseY: y, hp: maxHp, maxHp, state: 'idle', until: 0, direction: kind === 'charger' ? -1 : 1, knockedUntil: 0,
@@ -69,7 +74,8 @@ export class EnemySystem {
         else if (enemy.contactReadyAt === Infinity) enemy.contactReadyAt = now + 650;
       }
       if (now < enemy.knockedUntil) continue;
-      if (enemy.knockedUntil) { enemy.knockedUntil = 0; body.setVelocityX(enemy.kind === 'charger' ? 0 : COMBAT.enemySpeed * enemy.direction); }
+      if (enemy.knockedUntil) { enemy.knockedUntil = 0; body.setVelocityX(enemy.kind === 'charger' || enemy.kind === 'hopper' ? 0 : COMBAT.enemySpeed * enemy.direction); }
+      if (enemy.kind === 'hopper') { this.hop(enemy, now); continue; }
       // Use physics coordinates and reverse only when heading out of bounds.
       // Repeated Body.reset() at an endpoint used to cancel patrol integration.
       if (enemy.kind !== 'charger') {
@@ -116,6 +122,25 @@ export class EnemySystem {
     }
   }
 
+  // Rest, crouch, then arc forward; turns around at the ends of its range.
+  private hop(enemy: Enemy, now: number) {
+    const { body } = enemy;
+    const cycle = (now + enemy.min * 7) % COMBAT.hopCycleMs;
+    const takeoff = COMBAT.hopCycleMs - COMBAT.hopAirMs;
+    if (cycle < takeoff) {
+      enemy.state = cycle > takeoff - 260 ? 'windup' : 'idle';
+      body.setVelocity(0, (enemy.baseY - body.center.y) * 12);
+      return;
+    }
+    if (enemy.state !== 'charge') {
+      if (body.center.x >= enemy.max - 30) enemy.direction = -1;
+      else if (body.center.x <= enemy.min + 30) enemy.direction = 1;
+      enemy.state = 'charge';
+    }
+    const lift = Math.sin((cycle - takeoff) / COMBAT.hopAirMs * Math.PI) * COMBAT.hopHeight;
+    body.setVelocity(enemy.direction * COMBAT.hopSpeed, (enemy.baseY - lift - body.center.y) * 12);
+  }
+
   // A dazed charger is the opening to punish, so touching it is harmless.
   canHurt(enemy: Enemy, now: number) {
     return enemy.sprite.active && now >= enemy.contactReadyAt && !(enemy.kind === 'charger' && enemy.state === 'recover');
@@ -152,7 +177,7 @@ export class EnemySystem {
       const { body } = enemy;
       if (enemy.sprite.active) {
         const facing = enemy.kind === 'charger' ? enemy.direction : Math.sign(body.velocity.x) || enemy.direction;
-        enemy.visual.update({ now, x: body.center.x, bottom: body.bottom, centerY: body.center.y, vx: body.velocity.x, facing, state: enemy.state });
+        enemy.visual.update({ now, x: body.center.x, bottom: body.bottom, centerY: body.center.y, groundY: enemy.baseY + body.halfHeight, vx: body.velocity.x, facing, state: enemy.state });
       }
       enemy.healthBar?.update(enemy.body.center.x, enemy.body.top - 11, enemy.hp, enemy.maxHp,
         enemy.sprite.active && enemy.body.right >= view.left && enemy.body.left <= view.right);

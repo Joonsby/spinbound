@@ -58,7 +58,12 @@ export const COMBAT = {
   enemySpeed: 65,
   chargeSpeed: 210,
   // Damage is player attack (default 10) per hit; a recovering charger takes double.
-  enemyHp: { patrol: 10, fly: 10, charger: 20 },
+  enemyHp: { patrol: 10, fly: 10, charger: 20, hopper: 10 },
+  // Hopper: rests, crouches, then arcs forward along its range.
+  hopCycleMs: 1500,
+  hopAirMs: 620,
+  hopHeight: 64,
+  hopSpeed: 95,
 };
 export type CombatTuning = typeof COMBAT;
 

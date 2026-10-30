@@ -26,7 +26,7 @@ const PLANS: Layout[][] = [
   ['run', 'descent', 'bridge', 'back', 'climb', 'run', 'bridge', 'descent', 'climb'],
 ];
 
-type Kind = 'rest' | 'spike' | 'gap' | 'mover' | 'patrol' | 'fly' | 'charger' | 'spring' | 'boost' | 'block' | 'ledge' | 'rope';
+type Kind = 'rest' | 'spike' | 'gap' | 'mover' | 'patrol' | 'fly' | 'charger' | 'hopper' | 'spring' | 'boost' | 'block' | 'ledge' | 'rope';
 type RunOptions = { pits: boolean; boosts: boolean; ropes: boolean; headroom: number; rests: number[] };
 
 function seeded(seed: number) {
@@ -101,7 +101,7 @@ class Builder {
     const rests = [...options.rests].sort((a, b) => a - b);
     const weights: [Kind, number][] = [
       ['spike', 3], ['patrol', 2], ['block', options.headroom >= 330 ? 1 : 0], ['ledge', options.headroom >= 300 ? 0.8 : 0],
-      ['gap', options.pits ? 2 : 0], ['mover', options.pits && d >= 0.15 ? 0.9 : 0], ['fly', 1.2],
+      ['gap', options.pits ? 2 : 0], ['mover', options.pits && d >= 0.15 ? 0.9 : 0], ['fly', 1.2], ['hopper', d >= 0.1 ? 1 : 0],
       ['charger', d >= 0.35 ? 0.7 : 0], ['spring', options.headroom >= 380 ? 0.8 : 0],
       ['boost', options.boosts ? 0.7 : 0], ['rope', options.ropes && d >= 0.2 ? 0.6 : 0],
     ];
@@ -116,7 +116,7 @@ class Builder {
       const kind: Kind = rests.length && x + 240 >= rests[0] ? (rests.shift(), 'rest') : pick();
       const double = kind === 'spike' && d > 0.4 && this.rand() < 0.5;
       const gapWidth = kind === 'gap' ? this.between(100, 130 + 40 * d) : kind === 'mover' ? this.between(320, 420) : kind === 'rope' ? 440 : 0;
-      const half = { rest: 90, spike: double ? 80 : 55, gap: gapWidth / 2 + 30, mover: gapWidth / 2 + 40, patrol: 110, fly: 120, charger: 185, spring: 60, boost: 60, block: 90, ledge: 100, rope: 260 }[kind];
+      const half = { rest: 90, spike: double ? 80 : 55, gap: gapWidth / 2 + 30, mover: gapWidth / 2 + 40, patrol: 110, fly: 120, charger: 185, hopper: 130, spring: 60, boost: 60, block: 90, ledge: 100, rope: 260 }[kind];
       const c = x + half;
       if (c + half > to) break;
       if (kind === 'rest') {
@@ -137,8 +137,8 @@ class Builder {
         // Flush with the floor and docking at both edges, as in stage 1.
         stage.movingPlatforms.push({ x: left + 50, y: top + 10, axis: 'x', min: left + 50, max: right - 50, speed: Math.round(70 + 40 * d) });
         this.coinLine(left + 60, right - 60, top - 50, 70);
-      } else if (kind === 'patrol' || kind === 'charger') {
-        const reach = kind === 'patrol' ? 80 : 150;
+      } else if (kind === 'patrol' || kind === 'charger' || kind === 'hopper') {
+        const reach = kind === 'charger' ? 150 : kind === 'hopper' ? 100 : 80;
         stage.enemyDetails!.push({ kind, x: c, y: top - 18, min: c - reach, max: c + reach });
         this.coinLine(c - 60, c + 60, top - 110, 60);
       } else if (kind === 'fly') {

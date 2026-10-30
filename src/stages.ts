@@ -1,4 +1,4 @@
-export type EnemyKind = 'patrol' | 'fly' | 'charger';
+export type EnemyKind = 'patrol' | 'fly' | 'charger' | 'hopper';
 export type PadKind = 'spring' | 'spring-left' | 'spring-right' | 'boost';
 
 // The extension lets the Node tests load this module directly.

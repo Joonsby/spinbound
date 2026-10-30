@@ -188,7 +188,7 @@ export class GameScene extends Phaser.Scene {
       ...stage.enemies.map(([min, max]): EnemyConfig => ({ kind: 'patrol', x: min, y: 462, min, max })),
       ...(stage.enemyDetails ?? []),
     ];
-    this.enemies = new EnemySystem(this, enemyConfigs, this.stageIndex === 0);
+    this.enemies = new EnemySystem(this, enemyConfigs, this.stageIndex === 0, worldOf(this.stageIndex));
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
 
     this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width, worldTop);
