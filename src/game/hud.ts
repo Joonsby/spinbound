@@ -38,7 +38,7 @@ export class Hud {
   readonly reviveCoinButton = element<HTMLButtonElement>('#revive-coins');
   readonly reviveSkipButton = element<HTMLButtonElement>('#revive-skip');
   private reward = element('#result-reward');
-  private bossBonus = element('#result-bonus');
+  private worldBonus = element('#result-bonus');
   private unlock = element('#unlock');
   private unlockRarity = element('#unlock-rarity');
   private unlockPortrait = element<HTMLImageElement>('#unlock-portrait');
@@ -122,10 +122,10 @@ export class Hud {
     if (amount !== null) this.reward.replaceChildren(stat('coin-icon', doubled ? '보상 2배 ' : '보상 ', doubled ? amount * 2 : amount, '코인'));
   }
 
-  // First boss clear: bonus coins plus one of every item.
-  setBossBonus(coins: number | null) {
-    this.bossBonus.hidden = coins === null;
-    if (coins !== null) this.bossBonus.replaceChildren(stat('coin-icon', '보스 첫 처치 ', coins, '코인'), stat('icon icon-box', '아이템 ', 3, '종'));
+  // First clear of a world's last stage: bonus coins plus one of every item.
+  setWorldBonus(coins: number | null) {
+    this.worldBonus.hidden = coins === null;
+    if (coins !== null) this.worldBonus.replaceChildren(stat('coin-icon', '월드 첫 클리어 ', coins, '코인'), stat('icon icon-box', '아이템 ', 3, '종'));
   }
 
   showUnlock(character: Character, portrait: string, remaining: number) {

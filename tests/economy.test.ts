@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ECONOMY, UPGRADES } from '../src/game/config.ts';
-import { bossBonus, buyItem, buyUpgrade, clearReward, reviveOffer, takeItems, upgradeCost, upgradeLevel } from '../src/game/economy.ts';
+import { buyItem, buyUpgrade, clearReward, reviveOffer, takeItems, upgradeCost, upgradeLevel, worldBonus } from '../src/game/economy.ts';
 
 test('a clear pays the coins picked up plus the bonus', () => {
   assert.equal(clearReward(37, ECONOMY), 37 + ECONOMY.clearBonus);
@@ -16,9 +16,9 @@ test('no revive before a checkpoint; paying needs enough coins', () => {
   assert.equal(reviveOffer(true, ECONOMY.reviveCost, ECONOMY).canPay, true);
 });
 
-test('boss bonus grows with the boss level', () => {
-  assert.equal(bossBonus(1, ECONOMY), ECONOMY.bossBonus);
-  assert.equal(bossBonus(10, ECONOMY), ECONOMY.bossBonus + 9 * ECONOMY.bossBonusPerLevel);
+test('world clear bonus grows with the world', () => {
+  assert.equal(worldBonus(1, ECONOMY), ECONOMY.worldBonus);
+  assert.equal(worldBonus(10, ECONOMY), ECONOMY.worldBonus + 9 * ECONOMY.worldBonusPerWorld);
 });
 
 test('upgrades climb one level per purchase and stop at the top', () => {

@@ -53,10 +53,8 @@ export const COMBAT = {
   recoilLift: 240,
   enemyHitCooldownMs: 350,
   hitStopMs: 50,
-  bossHitStopMs: 90,
   coinScore: 100,
   enemyScore: 200,
-  bossScore: 2000,
   enemySpeed: 65,
   chargeSpeed: 210,
   // Damage is player attack (default 10) per hit; a recovering charger takes double.
@@ -69,9 +67,9 @@ export const ECONOMY = {
   // Added to the coins picked up in a cleared stage.
   clearBonus: 20,
   reviveCost: 50,
-  // First clear of a boss stage, growing with the boss level; comes with one of every item.
-  bossBonus: 300,
-  bossBonusPerLevel: 100,
+  // First clear of a world's last stage, growing per world; comes with one of every item.
+  worldBonus: 300,
+  worldBonusPerWorld: 100,
 };
 export type EconomyTuning = typeof ECONOMY;
 
@@ -105,20 +103,4 @@ export const GIMMICK = {
   ropeReleaseSteer: 60,
   ropeMaxReleaseX: 460,
   ropeMaxReleaseUp: 700,
-};
-
-export const BOSS = {
-  maxHp: 60,
-  phaseHp: [40, 20],
-  warningMs: [1000, 950, 850],
-  exposedMs: [2800, 2500, 2200],
-  recoverMs: 900,
-  chargeSpeed: [380, 450, 520],
-  waveSpeed: [260, 290, 320],
-  droneCount: [2, 2, 3],
-  droneHp: 10,
-  droneLifeMs: 9000,
-  debrisCount: [3, 2, 3],
-  debrisLifeMs: 2500,
-  hitCooldownMs: 600,
 };

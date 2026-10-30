@@ -3,8 +3,8 @@ import type { EconomyTuning, StatKey, UpgradeRule } from './config';
 // Clear reward: every coin picked up in the stage plus a flat bonus.
 export const clearReward = (stageCoins: number, tuning: EconomyTuning) => Math.max(0, Math.floor(stageCoins)) + tuning.clearBonus;
 
-// Special reward for the first clear of a boss stage.
-export const bossBonus = (level: number, tuning: EconomyTuning) => tuning.bossBonus + tuning.bossBonusPerLevel * (level - 1);
+// Special reward for the first clear of a world's last stage.
+export const worldBonus = (world: number, tuning: EconomyTuning) => tuning.worldBonus + tuning.worldBonusPerWorld * (world - 1);
 
 // A revive is offered only once a checkpoint was reached; paying for it needs enough coins.
 export function reviveOffer(hasCheckpoint: boolean, balance: number, tuning: EconomyTuning) {

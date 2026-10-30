@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { createRobotArt, robotPortraitUrl } from './graphics/robot-art';
 import { PORTRAIT_BLINK_KEY, PORTRAIT_KEY } from './graphics/asset-manifest';
-import { CHARACTERS, RARITY_LABELS, type Character } from './characters';
+import { CHARACTERS, RARITY_LABELS, unlockStage, type Character } from './characters';
 import { STAGES_PER_WORLD, WORLD_NAMES, worldOf } from './stage-gen';
 import { HP_POINTS, UPGRADES, type StatKey } from './game/config';
 import { upgradeCost, upgradeLevel } from './game/economy';
@@ -69,7 +69,9 @@ function characterCard(character: Character, confirming: string) {
   if (equipped) action = '<button disabled>장착 중</button>';
   else if (owned) action = `<button data-robot="${id}">장착</button>`;
   else if (unlock.kind === 'coins') action = `<button data-buy-robot="${id}" aria-label="${name} 코인 ${unlock.price}개로 구매" ${player.currency < unlock.price ? 'disabled' : ''}>${confirming === id ? '한 번 더 누르면 구매' : `${coin}${unlock.price}`}</button>`;
-  else action = `<button disabled aria-label="${unlock.kind === 'boss' ? '보스' : '스테이지'} ${unlock.kind === 'clear' || unlock.kind === 'boss' ? unlock.stage : 1} 클리어로 해금">${icon('lock')}${unlock.kind === 'boss' ? 'BOSS' : 'STAGE'} ${unlock.kind === 'clear' || unlock.kind === 'boss' ? unlock.stage : 1}</button>`;
+  else action = unlock.kind === 'world'
+    ? `<button disabled aria-label="월드 ${unlock.world} 클리어로 해금">${icon('lock')}WORLD ${unlock.world}</button>`
+    : `<button disabled aria-label="스테이지 ${unlockStage(unlock)} 클리어로 해금">${icon('lock')}STAGE ${unlockStage(unlock)}</button>`;
   return `<article class="char-card${owned ? '' : ' locked'}${equipped ? ' equipped' : ''}" data-rarity="${rarity}"><span class="rarity-badge">${RARITY_LABELS[rarity]}</span><img class="char-portrait" src="${robotPortraitUrl(character)}" alt=""><h3>${name}</h3>${action}</article>`;
 }
 
@@ -100,13 +102,13 @@ function upgradesContent() {
 function charactersContent(confirming: string) {
   const player = getPlayerProgress();
   const owned = CHARACTERS.filter((character) => player.ownedCharacters.includes(character.id)).length;
-  return `<div class="collection"><div class="prepare-head"><h2>보유 ${owned} / ${CHARACTERS.length}</h2><span class="chip">${coin}코인 ${player.currency}</span></div><p class="prepare-hint">일반은 스테이지를 깨면, 영웅은 보스를 처음 처치하면 얻어요 · 희귀와 전설은 코인으로 해금해요</p><div class="char-grid">${CHARACTERS.map((character) => characterCard(character, confirming)).join('')}</div></div>`;
+  return `<div class="collection"><div class="prepare-head"><h2>보유 ${owned} / ${CHARACTERS.length}</h2><span class="chip">${coin}코인 ${player.currency}</span></div><p class="prepare-hint">일반은 스테이지를 깨면, 영웅은 월드를 처음 끝내면 얻어요 · 희귀와 전설은 코인으로 해금해요</p><div class="char-grid">${CHARACTERS.map((character) => characterCard(character, confirming)).join('')}</div></div>`;
 }
 
 function stageCard(stage: StageData, index: number, unlocked: number) {
   const status = index + 1 > unlocked ? 'locked' : index + 1 < unlocked ? 'cleared' : 'current';
   const label = status === 'locked' ? `${icon('lock')}잠김` : status === 'cleared' ? `${icon('check')}클리어` : '도전!';
-  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${stage.boss ? '<span class="stage-boss">BOSS</span>' : ''}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : stage.name}</span><span class="stage-status">${label}</span></button>`;
+  return `<button class="stage-card" data-stage="${index}" data-status="${status}" ${status === 'locked' ? 'disabled' : ''}><span class="stage-thumb" aria-hidden="true"><span class="stage-number">${index + 1}</span>${(index + 1) % STAGES_PER_WORLD === 0 ? '<span class="stage-final">FINAL</span>' : ''}</span><span class="stage-name">${status === 'locked' ? '? ? ?' : stage.name}</span><span class="stage-status">${label}</span></button>`;
 }
 
 function prepareContent(stageIndex: number, picked: ReadonlySet<ItemId>) {

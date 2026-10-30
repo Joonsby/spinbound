@@ -124,7 +124,7 @@ export class Player {
     this.launch(now, undefined, -(held ? COMBAT.stompBounceHeld : COMBAT.stompBounce));
   }
 
-  // Bounce away from `sourceX` without damage (blocked attacks, armored boss).
+  // Bounce away from `sourceX` without damage (blocked attacks).
   recoil(now: number, sourceX: number, speed = COMBAT.recoilSpeed, lift = COMBAT.recoilLift) {
     const direction = this.x < sourceX ? -1 : 1;
     this.rolling = false;

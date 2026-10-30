@@ -182,21 +182,11 @@ for (const [index, stage] of STAGES.entries()) {
   });
 }
 
-test('boss arena has boosters on both halves so a roll is always reachable', () => {
-  for (const stage of STAGES) {
-    if (!stage.boss) continue;
-    const { left, right } = stage.boss;
-    const middle = (left + right) / 2;
-    const boosts = stage.pads.filter(([x, kind]) => kind === 'boost' && x > left && x < right);
-    assert.ok(boosts.some(([x]) => x < middle) && boosts.some(([x]) => x > middle));
-  }
-});
-
-test('100 stages in 10 worlds, each world after the first ending in a boss', () => {
+test('100 stages in 10 worlds, each generated world ending in a finale', () => {
   assert.equal(STAGES.length, 100);
-  for (let world = 2; world <= 10; world++) assert.ok(STAGES[world * 10 - 1].boss, `world ${world} boss`);
+  for (let world = 2; world <= 10; world++) assert.ok(STAGES[world * 10 - 1].name.endsWith('피날레'), `world ${world} finale`);
   const layouts = new Set(STAGES.slice(10).map((stage) => stage.name.split(' · ')[1]));
-  for (const label of ['질주', '되돌아가기', '오르막', '내리막', '구름다리', '보스']) assert.ok(layouts.has(label), label);
+  for (const label of ['질주', '되돌아가기', '오르막', '내리막', '구름다리', '피날레']) assert.ok(layouts.has(label), label);
   // Some stages finish left of the start and some above it.
   assert.ok(STAGES.some((stage) => stage.goal && stage.start && stage.goal.x < stage.start.x));
   assert.ok(STAGES.some((stage) => stage.goal && stage.start && stage.goal.y < stage.start.y - 200));

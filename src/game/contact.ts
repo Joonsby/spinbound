@@ -1,4 +1,4 @@
-// Engine-free collision rules shared by enemies, the boss and breakable walls.
+// Engine-free collision rules shared by enemies and breakable walls.
 // Boxes use Arcade body conventions: x/y is the top-left, prev is the position before this step.
 
 export type ContactBox = { x: number; y: number; prevX: number; prevY: number; width: number; height: number; vx: number; vy: number };

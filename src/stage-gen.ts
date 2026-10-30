@@ -14,11 +14,10 @@ const MAX_BLOCK = 1000;
 
 export const WORLD_NAMES = ['새싹 초원', '버섯 숲', '용암 협곡', '바람 고원', '안개 숲', '화산 공장', '구름 들판', '깊은 밀림', '불꽃 요새', '별빛 정상'];
 export const STAGES_PER_WORLD = 10;
-const BOSS_NAMES = ['FORGE-06', 'MOSS-20', 'MAGMA-30', 'GALE-40', 'FOG-50', 'IRON-60', 'CLOUD-70', 'JUNGLE-80', 'BLAZE-90', 'STAR-100'];
 
-type Layout = 'run' | 'back' | 'climb' | 'descent' | 'bridge';
-const LAYOUT_LABELS: Record<Layout, string> = { run: '질주', back: '되돌아가기', climb: '오르막', descent: '내리막', bridge: '구름다리' };
-// Slots 1–9 of a world; slot 10 is the boss. Two plans alternate between worlds.
+type Layout = 'run' | 'back' | 'climb' | 'descent' | 'bridge' | 'finale';
+const LAYOUT_LABELS: Record<Layout, string> = { run: '질주', back: '되돌아가기', climb: '오르막', descent: '내리막', bridge: '구름다리', finale: '피날레' };
+// Slots 1–9 of a world; slot 10 is a longer finale run. Two plans alternate between worlds.
 const PLANS: Layout[][] = [
   ['run', 'climb', 'back', 'bridge', 'descent', 'run', 'climb', 'back', 'descent'],
   ['run', 'descent', 'bridge', 'back', 'climb', 'run', 'bridge', 'descent', 'climb'],
@@ -198,8 +197,8 @@ class Builder {
 
 const round100 = (value: number) => Math.round(value / 100) * 100;
 
-function runLayout(b: Builder) {
-  const width = round100(3000 + 1500 * b.difficulty + b.rand() * 600);
+function runLayout(b: Builder, extra = 0) {
+  const width = round100(3000 + extra + 1500 * b.difficulty + b.rand() * 600);
   const rests = width < 3200 ? [width * 0.5] : [width * 0.36, width * 0.68];
   const gaps = b.run(420, width - 330, GROUND, { pits: true, boosts: true, ropes: true, headroom: 600, rests });
   b.floor(0, width, GROUND, gaps);
@@ -306,32 +305,15 @@ function bridgeLayout(b: Builder) {
   return b.finish({ x: 90, top: GROUND }, { x: width - 130, top: GROUND }, high);
 }
 
-function bossLayout(b: Builder, world: number) {
-  const approach = round100(2000 + 600 * b.difficulty);
-  const width = approach + 1400;
-  b.stage.width = width;
-  const gaps = b.run(420, approach - 200, GROUND, { pits: true, boosts: true, ropes: false, headroom: 600, rests: [approach * 0.5] });
-  b.floor(0, width, GROUND, gaps);
-  b.checkpoint(approach + 20, GROUND);
-  // Arena boosters on both halves keep a roll in reach wherever the boss stops.
-  b.stage.pads.push([approach + 250, 'boost'], [width - 250, 'boost']);
-  b.stage.boss = { entry: approach + 80, left: approach, right: width, x: width - 150, y: 432, level: world, name: BOSS_NAMES[world - 1] };
-  b.stage.sections = [
-    { x: 0, title: `${WORLD_NAMES[world - 1]} · 보스 전`, hint: '체크포인트를 지나면 보스가 기다려요' },
-    { x: approach - 80, title: `보스 · ${BOSS_NAMES[world - 1]}`, hint: '예고를 보고 피한 뒤 약점이 열리면 스핀 대시·밟기!' },
-  ];
-  return b.finish({ x: 90, top: GROUND }, { x: width - 130, top: GROUND }, GROUND);
-}
-
 // Stage `slot` (1–10) of `world` (2+), always the same layout for the same pair.
 export function generateStage(world: number, slot: number): StageData {
   const rand = seeded(world * 7919 + slot * 104729);
   const difficulty = Math.min(1, ((world - 2) * STAGES_PER_WORLD + slot) / 90);
   const theme = ((world - 1) % 3) as StageData['theme'];
   const worldName = WORLD_NAMES[world - 1];
-  if (slot === STAGES_PER_WORLD) return bossLayout(new Builder(rand, difficulty, theme, `${worldName} · 보스`, 0), world);
-  const layout = PLANS[world % 2][slot - 1];
+  const layout = slot === STAGES_PER_WORLD ? 'finale' : PLANS[world % 2][slot - 1];
   const builder = new Builder(rand, difficulty, theme, `${worldName} · ${LAYOUT_LABELS[layout]}`, 0);
+  if (layout === 'finale') return runLayout(builder, 1200);
   const build = { run: runLayout, back: backLayout, climb: climbLayout, descent: descentLayout, bridge: bridgeLayout }[layout];
   return build(builder);
 }
