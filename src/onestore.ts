@@ -4,9 +4,8 @@ import { getOperationalEnvironment } from '@apps-in-toss/web-framework';
 // up until startGameAsync; anywhere else initializeAsync resolves with `err` and nothing runs.
 const SDK_URL = 'https://h5sdk.onestore.net/lib/v1.1.0/onestore-h5-sdk.min.js';
 
-type Insets = { top: number; right: number; bottom: number; left: number };
 type OneStoreSdk = {
-  initializeAsync(): Promise<{ err?: string; safeArea?: Insets }>;
+  initializeAsync(): Promise<{ err?: string }>;
   setLoadingProgress(progress: number): void;
   startGameAsync(): Promise<unknown>;
   on(event: 'pause' | 'resume', listener: () => void): void;
@@ -39,12 +38,9 @@ export function loadOneStore() {
       const info = await client.initializeAsync();
       if (info.err) return null;
       connected = true;
-      const root = document.documentElement;
-      root.dataset.onestore = 'true';
-      for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
-        const value = info.safeArea?.[edge];
-        if (Number.isFinite(value)) root.style.setProperty(`--native-safe-${edge}`, `${Math.max(0, value!)}px`);
-      }
+      // The SDK's safeArea is left unused: its numbers came out far larger than the frame's real
+      // insets and padded every screen edge. CSS env() still covers notches.
+      document.documentElement.dataset.onestore = 'true';
       return client;
     })
     .catch((error: unknown) => { console.warn('[onestore]', error); return null; });
