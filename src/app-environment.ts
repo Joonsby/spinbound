@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { getOperationalEnvironment, SafeAreaInsets } from '@apps-in-toss/web-framework';
+import { onOneStoreLifecycle } from './onestore';
 
 // Browser events are used deliberately: the documented SDK has no AppState API.
 export function bindAppEnvironment(scene: Phaser.Scene, resetInput: () => void, pauseAudio: () => void, resumeAudio: () => void) {
@@ -46,10 +47,13 @@ export function bindAppEnvironment(scene: Phaser.Scene, resetInput: () => void, 
   window.addEventListener('focus', resume);
   window.addEventListener('pagehide', pause);
   window.addEventListener('pageshow', resume);
+  // ONE store pushes pause/resume itself when its app goes to the background.
+  const unbindOneStore = onOneStoreLifecycle(pause, resume);
   if (document.hidden) pause();
 
   return () => {
     unsubscribeSafeArea?.();
+    unbindOneStore();
     document.removeEventListener('visibilitychange', visibility);
     window.removeEventListener('blur', pause);
     window.removeEventListener('focus', resume);

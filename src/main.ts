@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { closeAudio } from './audio';
 import { startCloudSave } from './cloud-save';
 import { lockLandscapeInToss } from './screen-orientation';
+import { loadOneStore } from './onestore';
 import { BootScene } from './boot-scene';
 import { MainMenuScene, MenuScreenScene } from './menus';
 import { GameScene } from './game/game-scene';
@@ -16,6 +17,7 @@ document.addEventListener('contextmenu', (event) => event.preventDefault());
 document.addEventListener('dblclick', (event) => event.preventDefault());
 
 lockLandscapeInToss();
+loadOneStore();
 configureQuality(getPlayerProgress().graphicsQuality);
 const parent = document.querySelector<HTMLElement>('#game')!;
 // Canvas size = logical size × render scale; cameras zoom by the same factor.
