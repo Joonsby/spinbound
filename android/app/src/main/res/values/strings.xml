@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">스핀바운드</string>
     <string name="title_activity_main">스핀바운드</string>
-    <string name="package_name">com.fitplate.spinbound</string>
-    <string name="custom_url_scheme">com.fitplate.spinbound</string>
+    <string name="package_name">com.joonsby.spinbound</string>
+    <string name="custom_url_scheme">com.joonsby.spinbound</string>
 </resources>

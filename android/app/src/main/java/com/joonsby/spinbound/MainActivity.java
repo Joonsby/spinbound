@@ -1,4 +1,4 @@
-package com.fitplate.spinbound;
+package com.joonsby.spinbound;
 
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;

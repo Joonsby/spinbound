@@ -6,10 +6,10 @@ def keystorePropertiesFile = rootProject.file('keystore.properties')
 if (keystorePropertiesFile.exists()) keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
 
 android {
-    namespace = "com.fitplate.spinbound"
+    namespace = "com.joonsby.spinbound"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.fitplate.spinbound"
+        applicationId "com.joonsby.spinbound"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
