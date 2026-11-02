@@ -150,3 +150,7 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 .vercel
+
+# Android release signing: the keystore and its passwords stay out of git (back them up separately)
+android/keystore.properties
+*.jks

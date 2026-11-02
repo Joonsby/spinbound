@@ -10,5 +10,5 @@
     "allowImportingTsExtensions": true,
     "esModuleInterop": true
   },
-  "include": ["src", "vite.config.ts", "apps-in-toss.config.ts"]
+  "include": ["src", "vite.config.ts", "apps-in-toss.config.ts", "capacitor.config.ts"]
 }

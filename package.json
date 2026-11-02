@@ -9,14 +9,19 @@
     "test": "node --test \"tests/*.test.ts\"",
     "preview": "vite preview --host 0.0.0.0",
     "dev:toss": "vite --host 0.0.0.0 --mode toss",
-    "build:toss": "npm run build && ait build"
+    "build:toss": "npm run build && ait build",
+    "build:apk": "npm run build && cap sync android && cd android && .\\gradlew assembleRelease"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "3.9.0",
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
     "phaser": "^3.90.0"
   },
   "devDependencies": {
     "@apps-in-toss/devtools": "3.9.0",
+    "@capacitor/cli": "^8.6.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.0"
   },

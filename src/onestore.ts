@@ -1,4 +1,5 @@
 import { getOperationalEnvironment } from '@apps-in-toss/web-framework';
+import { inNativeApp } from './native-app';
 
 // ONE store H5 Game SDK. The store runs the game in a frame and keeps its own loading screen
 // up until startGameAsync; anywhere else initializeAsync resolves with `err` and nothing runs.
@@ -27,9 +28,9 @@ function inToss() {
   }
 }
 
-// Called once before the game is created. The Toss build never fetches the SDK.
+// Called once before the game is created. The Toss build and the Android app never fetch the SDK.
 export function loadOneStore() {
-  if (inToss()) return;
+  if (inToss() || inNativeApp()) return;
   sdk = import(/* @vite-ignore */ SDK_URL)
     .then(async ({ createSDK }: { createSDK: () => OneStoreSdk }) => {
       const client = createSDK();

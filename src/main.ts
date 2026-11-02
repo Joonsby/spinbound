@@ -3,6 +3,7 @@ import { closeAudio } from './audio';
 import { startCloudSave } from './cloud-save';
 import { lockLandscapeInToss } from './screen-orientation';
 import { loadOneStore } from './onestore';
+import { setUpNativeApp } from './native-app';
 import { BootScene } from './boot-scene';
 import { MainMenuScene, MenuScreenScene } from './menus';
 import { GameScene } from './game/game-scene';
@@ -43,6 +44,7 @@ const game = new Phaser.Game({
   scene: [BootScene, MainMenuScene, MenuScreenScene, GameScene],
 });
 game.events.once(Phaser.Core.Events.DESTROY, closeAudio);
+setUpNativeApp(game);
 installDebugClock(game);
 // Inside Toss, progress also syncs per player; open menus redraw when the cloud copy wins.
 startCloudSave(() => {

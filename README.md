@@ -105,3 +105,17 @@ SDK 연동과 번들 생성 범위이며 실제 토스 앱 테스트·출시 검
 - [게임 출시 가이드](https://developers-apps-in-toss.toss.im/checklist/app-game)
 - [Safe Area](https://developers-apps-in-toss.toss.im/documentation/common/screen/safe-area)
 - [WebView 설정](https://developers-apps-in-toss.toss.im/documentation/integration/props)
+
+안드로이드 APK(원스토어 앱):
+
+```sh
+npm run build:apk
+```
+
+같은 `dist/`를 Capacitor로 감싼 서명된 APK가 `android/app/build/outputs/apk/release/app-release.apk`에 생성됩니다.
+Android SDK와 JDK 21이 필요하고, SDK 경로는 `android/local.properties`에 둡니다.
+
+- 서명 키 `android/spinbound-release.jks`와 비밀번호 파일 `android/keystore.properties`는 git에 올리지 않습니다. 키를 잃으면 스토어에 올린 앱을 업데이트할 수 없으므로 따로 백업합니다.
+- 업데이트를 올릴 때마다 `android/app/build.gradle`의 `versionCode`를 올립니다.
+- 앱은 가로 고정·전체화면으로 실행되며 테스트 광고와 원스토어 H5 SDK를 쓰지 않습니다. 뒤로가기는 열린 창 닫기, 게임 일시정지, 메뉴 뒤로 가기, 로비에서 종료 확인 순서로 동작합니다.
+- 앱인토스는 APK를 받지 않습니다. 토스에는 기존처럼 `npm run build:toss`의 `.ait`를 올립니다.
