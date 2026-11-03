@@ -1,14 +1,11 @@
-import { inNativeApp } from './native-app';
-import { inOneStore } from './onestore';
-
 // TEMPORARY mock ads until Apps in Toss ads (TossAds / GoogleAdMob) are connected.
 // The game only calls showRewardedAd(); the banner is a fixed slot in index.html (#ad-banner-slot).
 // Replacing the provider later only touches this file and that slot.
 
 const MOCK_AD_SECONDS = 3;
 
-// The store builds have no ads connected yet: the ONE store frame and the Android app.
-export const adsHidden = () => inOneStore() || inNativeApp();
+// Every build launches without ads for now (Toss, ONE store, the Android app); style.css hides the banner to match.
+export const adsHidden = () => true;
 
 // Resolves true when the ad was watched to the end (grant the reward), false when it was closed early.
 export function showRewardedAd(purpose: string): Promise<boolean> {

@@ -56,6 +56,8 @@ startCloudSave(() => {
 function applyGameSize() {
   const previous = [getRenderScale(), getViewZoom()].join();
   const { width, height } = gameSize();
+  // Phaser re-measures its parent only every 500 ms; measure first or FIT keeps the old size and leaves margins.
+  game.scale.getParentBounds();
   game.scale.setGameSize(width, height);
   if ([getRenderScale(), getViewZoom()].join() !== previous) game.events.emit(RENDER_SCALE_EVENT, getRenderScale());
 }
