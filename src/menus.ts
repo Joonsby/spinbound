@@ -106,10 +106,16 @@ function upgradesContent() {
   return `<div class="prepare"><div class="prepare-head"><h2>영구 강화</h2><span class="chip">${coin}코인 ${currency}</span></div><p class="prepare-hint">강화는 모든 스테이지에 적용돼요</p><div class="boost-grid">${(Object.keys(UPGRADES) as StatKey[]).map(upgradeCard).join('')}</div></div>`;
 }
 
-function charactersContent(confirming: string) {
+// The collection is paged so one screen holds it, like the stage worlds.
+const CHARACTERS_PER_PAGE = 12;
+const CHARACTER_PAGES = Math.ceil(CHARACTERS.length / CHARACTERS_PER_PAGE);
+
+function charactersContent(confirming: string, page: number) {
   const player = getPlayerProgress();
   const owned = CHARACTERS.filter((character) => player.ownedCharacters.includes(character.id)).length;
-  return `<div class="collection"><div class="prepare-head"><h2>보유 ${owned} / ${CHARACTERS.length}</h2><span class="chip">${coin}코인 ${player.currency}</span></div><p class="prepare-hint">일반·영웅은 클리어로, 희귀·전설은 코인으로</p><div class="char-grid">${CHARACTERS.map((character) => characterCard(character, confirming)).join('')}</div></div>`;
+  const shown = CHARACTERS.slice(page * CHARACTERS_PER_PAGE, (page + 1) * CHARACTERS_PER_PAGE);
+  const pager = `<div class="page-bar"><button data-page-step="-1" aria-label="이전 페이지" ${page > 0 ? '' : 'disabled'}>${icon('left')}</button><span>${page + 1} / ${CHARACTER_PAGES}</span><button data-page-step="1" aria-label="다음 페이지" ${page < CHARACTER_PAGES - 1 ? '' : 'disabled'}>${icon('right')}</button></div>`;
+  return `<div class="collection"><div class="prepare-head"><h2>보유 ${owned} / ${CHARACTERS.length}</h2>${pager}<span class="chip">${coin}코인 ${player.currency}</span></div><p class="prepare-hint">일반·영웅은 클리어로, 희귀·전설은 코인으로</p><div class="char-grid">${shown.map((character) => characterCard(character, confirming)).join('')}</div></div>`;
 }
 
 // Cards sit under the world bar: generated stages drop the world name, world 1 keeps its own title.
@@ -173,6 +179,7 @@ export class MenuScreenScene extends Phaser.Scene {
   private carry: Carry = {};
   private picked = new Set<ItemId>();
   private world = 1;
+  private page = 0;
   private confirming = '';
   constructor() { super('MenuScreenScene'); }
   init(data: { screen?: Screen; stageIndex?: number; carry?: Carry; world?: number }) {
@@ -180,6 +187,7 @@ export class MenuScreenScene extends Phaser.Scene {
     const worlds = Math.ceil(STAGES.length / STAGES_PER_WORLD);
     this.world = Phaser.Math.Clamp(data.world ?? worldOf(Math.min(getPlayerProgress().unlockedStage, STAGES.length) - 1), 1, worlds);
     this.confirming = '';
+    this.page = 0;
     this.stageIndex = Math.floor(data.stageIndex ?? 0);
     this.carry = data.carry ?? {};
     this.picked = new Set();
@@ -195,11 +203,11 @@ export class MenuScreenScene extends Phaser.Scene {
       const first = (this.world - 1) * STAGES_PER_WORLD;
       const worlds = Math.ceil(STAGES.length / STAGES_PER_WORLD);
       const cards = STAGES.slice(first, first + STAGES_PER_WORLD).map((stage, offset) => stageCard(stage, first + offset, unlocked)).join('');
-      content = `<div class="world-bar"><button data-world-step="-1" aria-label="이전 월드" ${this.world > 1 ? '' : 'disabled'}>${icon('left')}</button><h2>WORLD ${this.world} · ${WORLD_NAMES[this.world - 1]}</h2><button data-world-step="1" aria-label="다음 월드" ${this.world < worlds ? '' : 'disabled'}>${icon('right')}</button></div><div class="stage-progress"><span>${icon('flag')}해금</span><i class="progress-track"><b></b></i><strong>${unlocked} / ${STAGES.length}</strong></div><div class="stage-grid">${cards}</div>`;
+      content = `<div class="stage-top"><div class="world-bar"><button data-world-step="-1" aria-label="이전 월드" ${this.world > 1 ? '' : 'disabled'}>${icon('left')}</button><h2>WORLD ${this.world} · ${WORLD_NAMES[this.world - 1]}</h2><button data-world-step="1" aria-label="다음 월드" ${this.world < worlds ? '' : 'disabled'}>${icon('right')}</button></div><div class="stage-progress"><span>${icon('flag')}해금</span><i class="progress-track"><b></b></i><strong>${unlocked} / ${STAGES.length}</strong></div></div><div class="stage-grid">${cards}</div>`;
     }
     if (this.screen === 'prepare') content = prepareContent(this.stageIndex, this.picked);
     if (this.screen === 'stats') content = upgradesContent();
-    if (this.screen === 'characters') content = charactersContent(this.confirming);
+    if (this.screen === 'characters') content = charactersContent(this.confirming, this.page);
     if (this.screen === 'inventory') {
       const owned = ITEM_IDS.filter((id) => itemCount(id) > 0);
       content = `<article class="menu-panel"><h2>보유 아이템 ${player.items.length}개</h2>${owned.length ? `<ul class="item-grid">${owned.map((id) => `<li>${icon(ITEM_ICONS[id])}${ITEMS[id].name} ×${itemCount(id)}</li>`).join('')}</ul>` : `<div class="empty-state">${icon('box')}<p>보유한 아이템이 없습니다.</p></div>`}<p>아이템은 출전 준비 화면에서 살 수 있어요</p></article>`;
@@ -228,13 +236,19 @@ export class MenuScreenScene extends Phaser.Scene {
         root.querySelector<HTMLButtonElement>(`[data-upgrade="${button.dataset.upgrade}"]`)?.focus({ preventScroll: true });
       } else if (button.dataset.worldStep) {
         this.scene.restart({ screen: 'stages', world: this.world + Number(button.dataset.worldStep) });
+      } else if (button.dataset.pageStep) {
+        const step = button.dataset.pageStep;
+        this.page = Phaser.Math.Clamp(this.page + Number(step), 0, CHARACTER_PAGES - 1);
+        this.confirming = '';
+        root.querySelector('.menu-content')!.innerHTML = charactersContent(this.confirming, this.page);
+        root.querySelector<HTMLButtonElement>(`[data-page-step="${step}"]`)?.focus({ preventScroll: true });
       } else if (button.dataset.robot || button.dataset.buyRobot) {
-        // Re-render in place so the long list keeps its scroll position.
+        // Re-render in place so the page keeps its scroll position.
         if (button.dataset.robot) { equipCharacter(button.dataset.robot); this.confirming = ''; }
         else if (this.confirming === button.dataset.buyRobot) { buyCharacter(button.dataset.buyRobot!); this.confirming = ''; }
         else this.confirming = button.dataset.buyRobot!;
         const scroll = root.scrollTop;
-        root.querySelector('.menu-content')!.innerHTML = charactersContent(this.confirming);
+        root.querySelector('.menu-content')!.innerHTML = charactersContent(this.confirming, this.page);
         root.scrollTop = scroll;
       } else if (button.dataset.action === 'sound') {
         setSoundEnabled(!getSoundEnabled()); button.textContent = `사운드 ${getSoundEnabled() ? 'ON' : 'OFF'}`; button.setAttribute('aria-pressed', String(getSoundEnabled()));

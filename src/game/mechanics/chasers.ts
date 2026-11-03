@@ -21,13 +21,16 @@ export class DragonChase {
   private root: Phaser.GameObjects.Container;
   private jaw: Phaser.GameObjects.Image;
   private wing: Phaser.GameObjects.Image;
+  private farWing: Phaser.GameObjects.Image;
   private holdUntil = 0;
 
   constructor(scene: Phaser.Scene, private floor: number) {
+    // The far wing is the same art, darker and a little ahead, behind the body; the near wing is in front.
+    this.farWing = part(scene, CHASE_KEYS.dragonWing, DRAGON.wing, DRAGON.wing.x + 30, DRAGON.wing.y - 6).setTint(0x7a5660);
     this.wing = part(scene, CHASE_KEYS.dragonWing, DRAGON.wing, DRAGON.wing.x, DRAGON.wing.y);
     this.jaw = part(scene, CHASE_KEYS.dragonJaw, DRAGON.jaw, DRAGON.jaw.x, DRAGON.jaw.y);
     const body = part(scene, CHASE_KEYS.dragonBody, DRAGON.body);
-    this.root = scene.add.container(0, 0, [this.wing, this.jaw, body]).setDepth(DEPTH.player + 0.6);
+    this.root = scene.add.container(0, 0, [this.farWing, this.jaw, body, this.wing]).setDepth(DEPTH.player + 0.6);
   }
 
   reset(playerX: number, now: number) {
@@ -45,6 +48,7 @@ export class DragonChase {
     const t = now / 1000;
     this.root.setPosition(this.x, this.floor - 150 + Math.sin(t * 2.2) * 8);
     this.wing.setAngle(Math.sin(t * 3) * 12);
+    this.farWing.setAngle(Math.sin(t * 3 - 0.5) * 10 - 6);
     this.jaw.setAngle(gap < 320 ? 18 + Math.sin(t * 10) * 8 : 8 + Math.sin(t * 2) * 4);
     return gap < 10;
   }
