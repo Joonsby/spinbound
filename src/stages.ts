@@ -72,8 +72,9 @@ function coinArc(stage: StageData, centerX: number, y: number, width: number, he
 // moving platforms wait for later stages, which hint them the first time they come into view.
 const STAGE_ONE: StageData = {
   theme: 0, name: '새벽 초원의 대모험', width: 7600, tutorial: true, rollCombo: true,
-  checkpoint: { x: 3380, y: 450 },
-  checkpoints: [{ x: 3380, y: 450 }, { x: 5600, y: 450 }],
+  // The first checkpoint sits where the spike jump lands, so missing the first spin dash only replays it.
+  checkpoint: { x: 1800, y: 450 },
+  checkpoints: [{ x: 1800, y: 450 }, { x: 3380, y: 450 }, { x: 5600, y: 450 }],
   platforms: [
     // Roof of the hidden tunnel; both tunnel ends are breakable walls.
     [5040, 385, 400, 30],
@@ -84,17 +85,16 @@ const STAGE_ONE: StageData = {
     { kind: 'patrol', x: 650, y: 462, min: 600, max: 720 },
     { kind: 'patrol', x: 870, y: 462, min: 820, max: 940 },
     { kind: 'patrol', x: 1090, y: 462, min: 1040, max: 1160 },
-    // Spin dash pair, with a runway after the spike jump lands.
-    { kind: 'patrol', x: 2060, y: 462, min: 2010, max: 2110 },
-    { kind: 'patrol', x: 2240, y: 462, min: 2190, max: 2290 },
+    // One spin dash target, on its own, with a runway after the spike jump lands.
+    { kind: 'patrol', x: 2160, y: 462, min: 2120, max: 2200 },
     // Combo line after the second booster.
     { kind: 'patrol', x: 2700, y: 462, min: 2650, max: 2760 },
     { kind: 'patrol', x: 2890, y: 462, min: 2840, max: 2950 },
     { kind: 'patrol', x: 3080, y: 462, min: 3030, max: 3140 },
-    // Under the spring's arc: stomp them on the way down. They stay well clear of the pit, so a knock
-    // from one never throws the robot into it.
-    { kind: 'fly', x: 3780, y: 390, min: 3720, max: 3840 },
-    { kind: 'fly', x: 3960, y: 390, min: 3900, max: 4020 },
+    // Under the spring's arc: stomp them on the way down. They stay well clear of the pit, so neither a
+    // knock from one nor a held-jump bounce off one carries the robot into it.
+    { kind: 'fly', x: 3710, y: 390, min: 3660, max: 3760 },
+    { kind: 'fly', x: 3890, y: 390, min: 3840, max: 3940 },
     { kind: 'patrol', x: 5420, y: 462, min: 5370, max: 5480 },
     { kind: 'charger', x: 6050, y: 462, min: 5900, max: 6250 },
     // Last combo run to the flag.
@@ -108,7 +108,7 @@ const STAGE_ONE: StageData = {
   rewards: [{ x: 5040, y: 440, score: 1000 }],
   sections: [
     { x: 0, keys: ['boost'], hint: '부스터를 밟고 굴러서 적을 쓰러뜨려요' },
-    { x: 1300, keys: ['dash'], hint: '같은 방향 두 번 톡톡 » 스핀 대시!' },
+    { x: 1560, keys: ['dash'], hint: '같은 방향 두 번 톡톡 » 스핀 대시!' },
     { x: 2380, keys: ['combo'], hint: '구르며 연달아 쓰러뜨리면 콤보 · 더 빨라져요' },
     { x: 3450, keys: ['spring', 'fly'], hint: '스프링으로 튀어 올라 위에서 밟아요' },
     { x: 4500, keys: ['wall'], hint: '구르며 금 간 벽에 부딪히면 숨은 보상!' },
@@ -117,20 +117,20 @@ const STAGE_ONE: StageData = {
   ],
   signs: [
     { x: 220, y: 380, text: '부스터 » 굴러서 공격' },
-    { x: 1700, y: 380, text: '두 번 톡톡 » 스핀 대시' },
+    { x: 1950, y: 380, text: '두 번 톡톡 » 스핀 대시' },
     { x: 2400, y: 380, text: '연달아 쓰러뜨리면 콤보!' },
     { x: 3470, y: 380, text: '스프링 ↑ 위에서 밟기' },
     { x: 4540, y: 380, text: '구르기로 금 간 벽 부수기' },
     { x: 5700, y: 380, text: '돌진이 끝난 직후가 기회!' },
   ],
 };
-groundRuns(STAGE_ONE, [[0, 4300], [4480, 7600]]);
+groundRuns(STAGE_ONE, [[0, 4350], [4530, 7600]]);
 coinLine(STAGE_ONE, 450, 1150, 440, 100);
 coinArc(STAGE_ONE, 1450, 420, 110, 50, 3);
 coinLine(STAGE_ONE, 1750, 2300, 440, 90);
 coinLine(STAGE_ONE, 2550, 3150, 440, 100);
 coinArc(STAGE_ONE, 3740, 260, 280, 80, 5);
-coinArc(STAGE_ONE, 4390, 420, 140, 60, 3);
+coinArc(STAGE_ONE, 4440, 420, 140, 60, 3);
 coinLine(STAGE_ONE, 4900, 5180, 440, 70);
 coinLine(STAGE_ONE, 4880, 5200, 330, 80);
 coinLine(STAGE_ONE, 5500, 5850, 440, 70);

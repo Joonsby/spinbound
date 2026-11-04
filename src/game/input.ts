@@ -11,8 +11,9 @@ export class InputController {
   private pointers: Record<Control, Set<number>> = { left: new Set(), right: new Set(), jump: new Set() };
   private buttons = new Map<Control, HTMLButtonElement>();
   private jumpEdges = 0;
-  // Presses and releases of a direction in the order they happened; double taps count from the release.
-  private directionEdges: { direction: -1 | 1; down: boolean }[] = [];
+  // Presses and releases of a direction with their event times; double taps count from the release.
+  // Event times, not frame times, so a slow frame rate never stretches or squeezes a double tap.
+  private directionEdges: { direction: -1 | 1; down: boolean; at: number }[] = [];
   private taps = createTapState();
   private keys: Record<'LEFT' | 'RIGHT' | 'UP' | 'A' | 'D' | 'W' | 'SPACE', Phaser.Input.Keyboard.Key>;
   private cleanup: (() => void)[] = [];
@@ -26,9 +27,9 @@ export class InputController {
       const down = (event: PointerEvent) => {
         event.preventDefault();
         try { button.setPointerCapture(event.pointerId); } catch { /* Pointer already released. */ }
-        this.press(control, event.pointerId);
+        this.press(control, event.pointerId, event.timeStamp);
       };
-      const up = (event: PointerEvent) => this.release(control, event.pointerId);
+      const up = (event: PointerEvent) => this.release(control, event.pointerId, event.timeStamp);
       button.addEventListener('pointerdown', down);
       for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) button.addEventListener(type, up);
       this.cleanup.push(() => {
@@ -57,21 +58,22 @@ export class InputController {
     });
   }
 
-  press(control: Control, pointerId: number) {
+  // `at` is the event time (performance.now() clock); debug bots pass their own clock.
+  press(control: Control, pointerId: number, at = performance.now()) {
     if (control === 'jump' && this.pointers.jump.size === 0) this.jumpEdges += 1;
-    if (control !== 'jump' && this.pointers[control].size === 0) this.directionEdges.push({ direction: control === 'left' ? -1 : 1, down: true });
+    if (control !== 'jump' && this.pointers[control].size === 0) this.directionEdges.push({ direction: control === 'left' ? -1 : 1, down: true, at });
     this.pointers[control].add(pointerId);
     this.buttons.get(control)?.classList.add('pressed');
   }
 
-  release(control: Control, pointerId: number) {
+  release(control: Control, pointerId: number, at = performance.now()) {
     // pointerup and lostpointercapture both arrive for one lift; only the first finds the pointer.
     if (!this.pointers[control].delete(pointerId) || this.pointers[control].size) return;
     this.buttons.get(control)?.classList.remove('pressed');
-    if (control !== 'jump') this.directionEdges.push({ direction: control === 'left' ? -1 : 1, down: false });
+    if (control !== 'jump') this.directionEdges.push({ direction: control === 'left' ? -1 : 1, down: false, at });
   }
 
-  poll(now: number): InputFrame {
+  poll(): InputFrame {
     const { keys } = this;
     // Evaluate every JustDown: it consumes the edge, so short-circuiting would replay it next frame.
     const up = Phaser.Input.Keyboard.JustDown(keys.UP);
@@ -83,15 +85,17 @@ export class InputController {
     const [arrowLeftUp, aUp, arrowRightUp, dUp] = [keys.LEFT, keys.A, keys.RIGHT, keys.D].map((key) => Phaser.Input.Keyboard.JustUp(key));
     const leftUp = (arrowLeftUp && !keys.A.isDown) || (aUp && !keys.LEFT.isDown);
     const rightUp = (arrowRightUp && !keys.D.isDown) || (dUp && !keys.RIGHT.isDown);
-    // Released and pressed again within one frame: up first, then down.
-    if (leftUp) this.directionEdges.push({ direction: -1, down: false });
-    if (rightUp) this.directionEdges.push({ direction: 1, down: false });
-    if (leftTap) this.directionEdges.push({ direction: -1, down: true });
-    if (rightTap) this.directionEdges.push({ direction: 1, down: true });
+    // Phaser keeps each key's event times; the latest one of a pair is the edge.
+    const time = (pair: Phaser.Input.Keyboard.Key[], field: 'timeDown' | 'timeUp') => Math.max(...pair.map((key) => key[field]));
+    if (leftUp) this.directionEdges.push({ direction: -1, down: false, at: time([keys.LEFT, keys.A], 'timeUp') });
+    if (rightUp) this.directionEdges.push({ direction: 1, down: false, at: time([keys.RIGHT, keys.D], 'timeUp') });
+    if (leftTap) this.directionEdges.push({ direction: -1, down: true, at: time([keys.LEFT, keys.A], 'timeDown') });
+    if (rightTap) this.directionEdges.push({ direction: 1, down: true, at: time([keys.RIGHT, keys.D], 'timeDown') });
+    this.directionEdges.sort((a, b) => a.at - b.at);
     this.frame.dash = 0;
-    for (const { direction, down } of this.directionEdges) {
-      if (!down) registerRelease(this.taps, direction, now);
-      else if (registerTap(PHYSICS, this.taps, direction, now)) this.frame.dash = direction;
+    for (const { direction, down, at } of this.directionEdges) {
+      if (!down) registerRelease(this.taps, direction, at);
+      else if (registerTap(PHYSICS, this.taps, direction, at)) this.frame.dash = direction;
     }
     this.directionEdges.length = 0;
     const left = keys.LEFT.isDown || keys.A.isDown || this.pointers.left.size > 0;

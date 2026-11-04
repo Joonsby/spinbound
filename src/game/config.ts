@@ -42,12 +42,12 @@ export type MovementTuning = typeof PHYSICS;
 // Roll-kill combo (tried on stage 1, StageData.rollCombo): roll kills within windowMs of each other chain.
 // Every roll kill keeps the roll going a little longer; from the second on it also speeds the roll up and pays coins.
 export const COMBO = {
-  windowMs: 1600,
-  rollExtendMs: 700,
+  windowMs: 1800,
+  rollExtendMs: 400,
   boostMs: 900,
   baseSpeed: 420,
   speedPerStep: 20,
-  maxSpeed: 470,
+  maxSpeed: 450,
   maxBonusCoins: 4,
 };
 export type ComboTuning = typeof COMBO;
@@ -69,6 +69,9 @@ export const COMBAT = {
   recoilLift: 240,
   enemyHitCooldownMs: 350,
   hitStopMs: 50,
+  // Stage 1 only: an enemy that just hurt the robot waits this long past the robot's invulnerability,
+  // so walking back into it never costs a second hit the moment the blinking stops.
+  tutorialRehitMs: 700,
   coinScore: 100,
   enemyScore: 200,
   enemySpeed: 65,

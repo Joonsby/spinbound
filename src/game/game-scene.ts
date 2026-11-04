@@ -30,7 +30,7 @@ import { createRobotArt } from '../graphics/robot-art';
 import { LOGICAL_HEIGHT, RENDER_SCALE_EVENT } from '../graphics/display';
 import { EnemySystem, type EnemyConfig } from './enemies';
 import { VisualSync } from './visual-sync';
-import { Hud } from './hud';
+import { Hud, STATUS_FLASH_MS } from './hud';
 import { CameraController } from './camera';
 import { PadSystem } from './mechanics/pads';
 import { MovingPlatforms } from './mechanics/moving-platforms';
@@ -41,6 +41,7 @@ import { createChaseArt } from '../graphics/chase-art';
 import { installDebugHooks } from './debug';
 import { encounterSpots, ENCOUNTER_HINTS, markHintsSeen, resetHints, seenHints, type EncounterKey } from './tutorial';
 import { breakCombo, createComboState, registerRollKill } from './combo';
+import { createPlaytest, type PlaytestRecorder } from './playtest';
 
 const START = { x: 90, y: 440 };
 const CRYSTAL_IDLE_TINT = 0x8fa3b8;
@@ -91,6 +92,13 @@ export class GameScene extends Phaser.Scene {
   private combo = createComboState();
   // Mechanics whose one-time hint fires when they first come into view (stages without their own hints).
   private encounters: { key: EncounterKey; x: number; y: number; shown: boolean }[] = [];
+  // Dev-only play measurements (?debug=1); undefined in production builds.
+  private playtest?: PlaytestRecorder;
+  // What last hurt the robot, for the tip after a stage 1 failure.
+  private lastHurt: { cause: 'enemy' | 'spike' | 'fall'; kind?: string } | undefined;
+  private dashKillCelebrated = false;
+  // A flashed hint keeps the status line while it flashes; checkpoint and combo lines skip that time.
+  private hintHeldUntil = 0;
   private hud!: Hud;
   private controls!: InputController;
   private audio!: GameAudio;
@@ -145,6 +153,9 @@ export class GameScene extends Phaser.Scene {
     this.rewardDoubled = false;
     this.adOpen = false;
     this.combo = createComboState();
+    this.lastHurt = undefined;
+    this.dashKillCelebrated = false;
+    this.hintHeldUntil = 0;
     this.pauseOpen = false;
     this.confirmOpen = false;
     this.unlocks = [];
@@ -207,6 +218,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
     this.startMode(stage, spawn.x);
     this.encounters = stage.tutorial ? [] : encounterSpots(stage).map((spot) => ({ ...spot, shown: false }));
+    this.playtest = createPlaytest(this.stageIndex);
 
     this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width, worldTop);
     this.cameraControl.follow(spawn.x, spawn.y);
@@ -227,9 +239,9 @@ export class GameScene extends Phaser.Scene {
     installDebugHooks(this, {
       scene: this,
       state: () => this.debugState(),
-      press: (control: Control) => this.controls.press(control, -1),
-      release: (control: Control) => this.controls.release(control, -1),
-      teleport: (x: number, y: number) => { this.detachRopes(); this.player.respawn(x, y, this.time.now); },
+      press: (control: Control) => { this.playtest?.markScripted(); this.controls.press(control, -1, this.time.now); },
+      release: (control: Control) => { this.playtest?.markScripted(); this.controls.release(control, -1, this.time.now); },
+      teleport: (x: number, y: number) => { this.playtest?.markScripted(); this.detachRopes(); this.player.respawn(x, y, this.time.now); },
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       unbindEnvironment();
@@ -237,6 +249,7 @@ export class GameScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render, this);
       this.resultTimer?.remove(false);
       this.controls.destroy();
+      this.playtest?.finish('quit', this.coinCount);
       // Leaving from the pause menu: wake the shared audio context for the next scene.
       if (this.pauseOpen) this.audio.resumeFromBackground();
       this.audio.destroy();
@@ -308,7 +321,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.physics.add.overlap(this.player.sprite, hazards, (_player, object) => {
       const spike = object as Phaser.GameObjects.Triangle;
-      if (this.takeHit(spike.x)) this.flashTerrain(spike);
+      if (this.takeHit(spike.x, 'spike')) this.flashTerrain(spike);
     });
 
     const rewards = this.physics.add.staticGroup();
@@ -350,7 +363,7 @@ export class GameScene extends Phaser.Scene {
         crystal.clearTint();
         this.effects.checkpoint(point.x, floor - 40);
         this.audio.play('grab');
-        this.hud.setStatus('체크포인트 활성화! 다음 부활은 이곳에서');
+        this.sideStatus('체크포인트 활성화! 다음 부활은 이곳에서');
       });
     });
 
@@ -425,9 +438,10 @@ export class GameScene extends Phaser.Scene {
     const enemy = this.enemies.find(object);
     if (!enemy || this.finished || this.player.dead) return;
     const now = this.time.now;
+    this.playtest?.note('contact', this.player.x);
     const contact = classifyContact(this.player.contactBox(), this.player.rolling, this.toBox(enemy.body), RULES);
     if (contact === 'touch') {
-      if (this.enemies.canHurt(enemy, now)) this.takeHit(enemy.body.center.x);
+      if (this.enemies.canHurt(enemy, now) && this.takeHit(enemy.body.center.x, 'enemy', enemy.kind)) this.enemies.afterHurting(enemy, now, this.player.x);
       return;
     }
     const { x, y } = enemy.body.center;
@@ -441,9 +455,27 @@ export class GameScene extends Phaser.Scene {
       this.rig.event('happy');
       this.effects.popup(x, y - 28, `+${COMBAT.enemyScore}`);
       this.enemyScore += COMBAT.enemyScore;
-      if (contact === 'roll' && STAGES[this.stageIndex].rollCombo) this.rollCombo(x, y, now);
+      if (contact === 'roll') this.rollKill(x, y, now);
       this.updateScore();
       this.hitStop(COMBAT.hitStopMs);
+    }
+  }
+
+  private rollKill(x: number, y: number, now: number) {
+    const stage = STAGES[this.stageIndex];
+    const fromDash = this.player.rollFromDash;
+    this.playtest?.note('roll-kill', this.player.x);
+    if (fromDash) this.playtest?.note('dash-kill', this.player.x);
+    if (stage.rollCombo) this.rollCombo(x, y, now);
+    // Stage 1: the first enemy a spin dash takes down gets its own moment.
+    if (fromDash && stage.tutorial && !this.dashKillCelebrated) {
+      this.dashKillCelebrated = true;
+      this.effects.ring(x, y, 0x5cf2ff, 1.6);
+      this.effects.popup(x, y - 80, '대시 성공!');
+      this.audio.play('success');
+      this.hud.setStatus('스핀 대시 성공! 막히면 언제든 두 번 톡톡');
+      this.hud.flashStatus();
+      this.hitStop(110);
     }
   }
 
@@ -451,12 +483,13 @@ export class GameScene extends Phaser.Scene {
   private rollCombo(x: number, y: number, now: number) {
     const reward = registerRollKill(COMBO, this.combo, now);
     this.player.comboBoost(now, reward.rollMs, reward.boostMs, reward.speed);
+    this.playtest?.note('combo', this.player.x, reward.count);
     if (reward.count < 2) return;
     this.coinCount += reward.bonusCoins;
+    this.playtest?.note('bonus-coins', this.player.x, reward.bonusCoins);
     this.effects.popup(x, y - 56, `${reward.count} COMBO!`);
     this.audio.play('coin');
-    this.hud.setStatus(`${reward.count} 콤보! 속도 UP · 코인 +${reward.bonusCoins}`);
-    this.hud.flashStatus();
+    this.sideStatus(`${reward.count} 콤보! 속도 UP · 코인 +${reward.bonusCoins}`, true);
   }
 
   private onPad(kind: PadKind, x: number, y: number) {
@@ -551,6 +584,7 @@ export class GameScene extends Phaser.Scene {
     this.dragon?.reset(spawn.x, now);
     this.thief?.reset(spawn.x, now);
     this.hud.setStatus(`${this.checkpointActive ? '체크포인트' : '시작 지점'}에서 부활 · ${this.deaths}회`);
+    this.playtest?.note('respawn', spawn.x);
   }
 
   private loseHp() {
@@ -571,20 +605,24 @@ export class GameScene extends Phaser.Scene {
     this.updateScore();
     this.audio.play('hurt');
     this.cameras.main.shake(130, 0.004);
-    if (this.hp === 0) this.endStage(false);
+    if (this.hp === 0) { this.playtest?.note('death', this.player.x, this.lastHurt?.kind ?? this.lastHurt?.cause ?? 'hp'); this.endStage(false); }
     return true;
   }
 
   // Falling out of the stage kills outright, whatever the HP or shield.
   private fall() {
     if (this.finished) return;
+    this.lastHurt = { cause: 'fall' };
+    this.playtest?.note('death', this.player.x, 'fall');
     this.hp = 0;
     this.updateScore();
     this.endStage(false);
   }
 
-  private takeHit(sourceX: number) {
+  private takeHit(sourceX: number, cause: 'enemy' | 'spike', kind?: string) {
+    this.lastHurt = { cause, kind };
     if (!this.loseHp()) return false;
+    this.playtest?.note('hit', this.player.x, kind ?? cause);
     breakCombo(this.combo);
     if (!this.finished) {
       this.detachRopes();
@@ -672,6 +710,7 @@ export class GameScene extends Phaser.Scene {
     if (cleared) unlockNextStage(this.stageIndex + 1, STAGES.length);
     this.hud.setStatus(reason ? END_STATUS[reason] : cleared ? (allCleared ? '전체 스테이지 클리어! 축하합니다' : `Stage ${this.stageIndex + 1} 클리어!`) : 'HP가 모두 소진되었습니다');
     if (cleared) {
+      this.playtest?.finish('clear', this.coinCount);
       this.reward = Math.round(clearReward(this.coinCount - this.stageStartCoins, ECONOMY) * (STAGES[this.stageIndex].mode ? ECONOMY.modeBonus : 1));
       addCurrency(this.reward);
       const finale = (this.stageIndex + 1) % STAGES_PER_WORLD === 0;
@@ -684,11 +723,17 @@ export class GameScene extends Phaser.Scene {
         this.hud.showResult('clear', allCleared ? 'ALL CLEAR!' : reason === 'caught' ? '도둑 검거!' : 'STAGE CLEAR!', this.totalScore(), this.coinCount, !allCleared, '다시 하기');
         this.hud.setReward(this.reward);
         this.hud.setWorldBonus(special || null);
+        this.hud.setResultTip(null);
         this.showUnlock();
       });
       return;
     }
     this.effects.burst(this.player.x, this.player.y, 0xd7dde0, 12, 120);
+    // Stage 1 forgives: an active checkpoint brings the robot straight back, free, with a tip on what went wrong.
+    if (STAGES[this.stageIndex].tutorial && this.checkpointActive && !reason) {
+      this.resultTimer = this.time.delayedCall(700, () => this.tutorialRespawn());
+      return;
+    }
     // A revive restarts from the last checkpoint, so without one there is nothing to offer.
     // Running out of time or letting the thief escape ends the run; there is nothing to revive.
     const final = reason === 'timeout' || reason === 'escaped';
@@ -706,6 +751,14 @@ export class GameScene extends Phaser.Scene {
     markHintsSeen(keys);
     this.hud.setStatus(text);
     this.hud.flashStatus();
+    this.hintHeldUntil = this.time.now + STATUS_FLASH_MS;
+  }
+
+  // Checkpoint and combo lines: shown unless a hint is still flashing (the combo keeps its popup either way).
+  private sideStatus(text: string, flash = false) {
+    if (this.time.now < this.hintHeldUntil) return;
+    this.hud.setStatus(text);
+    if (flash) this.hud.flashStatus();
   }
 
   // Freezes the stage (physics, tweens, animations) while the pause menu is open.
@@ -761,9 +814,34 @@ export class GameScene extends Phaser.Scene {
   private totalScore() { return this.coinCount * COMBAT.coinScore + this.enemyScore; }
 
   private showGameOver(title = 'GAME OVER') {
+    this.playtest?.finish('death', this.coinCount);
     this.hud.hideResult();
     this.hud.showResult('over', title, this.totalScore(), this.coinCount, false, `Stage ${this.stageIndex + 1} 다시 시작`);
     this.hud.setReward(null);
+    this.hud.setResultTip(STAGES[this.stageIndex].tutorial ? this.failureTip() : null);
+  }
+
+  // Stage 1 failure: back at the last checkpoint with full HP, free, and a line on what went wrong.
+  private tutorialRespawn() {
+    if (!this.finished || this.hp > 0) return;
+    this.finished = false;
+    this.hp = this.maxHp;
+    this.updateScore();
+    this.physics.resume();
+    this.audio.resumeMusic();
+    this.respawn();
+    this.hud.setStatus(this.failureTip());
+    this.hud.flashStatus();
+  }
+
+  // What to try next, from what last hurt the robot.
+  private failureTip() {
+    const hurt = this.lastHurt;
+    if (hurt?.cause === 'fall') return '구덩이는 끝에서 점프해 건너요';
+    if (hurt?.cause === 'spike') return '가시는 점프로 넘어요';
+    if (hurt?.kind === 'charger') return '돌진이 끝나 멈춘 순간 대시로 맞혀요';
+    if (hurt?.kind === 'fly') return '나는 적은 위에서 밟아요';
+    return '걸어서 닿으면 다쳐요 · 톡톡 대시나 밟기로!';
   }
 
   // Back at the last checkpoint with full HP; score and coins of this run are kept.
@@ -808,7 +886,7 @@ export class GameScene extends Phaser.Scene {
       this.hitStopUntil = 0;
       this.physics.world.resume();
     }
-    const input = this.frameInput = this.controls.poll(now);
+    const input = this.frameInput = this.controls.poll();
     const player = this.player;
     const heldRope = this.ropes.find((rope) => rope.held);
     if (heldRope && input.jumpPressed && heldRope.canRelease(now)) {
@@ -819,7 +897,7 @@ export class GameScene extends Phaser.Scene {
     }
     const step = player.update(now, delta, input, this.platforms.carryVx());
     if (step.jumped) { this.audio.play('jump'); this.rig.event('jump'); this.effects.jump(player.x, player.body.bottom); }
-    if (step.dashed) { this.audio.play('boost'); this.effects.boostEntry(player.x, player.y); }
+    if (step.dashed) { this.audio.play('boost'); this.effects.boostEntry(player.x, player.y); this.playtest?.note('dash', player.x); }
     if (step.landed) {
       this.rig.event('land', Phaser.Math.Clamp(step.landingSpeed / 650, 0.35, 1.3));
       if (step.landingSpeed > 100) this.audio.play('land');
@@ -862,6 +940,7 @@ export class GameScene extends Phaser.Scene {
       player.sprite.x = 15;
       player.body.setVelocityX(Math.max(0, player.body.velocity.x));
     }
+    this.playtest?.tick(delta, Math.abs(player.body.velocity.x));
     if (player.y > 720) this.fall();
   }
 

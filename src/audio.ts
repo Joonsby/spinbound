@@ -1,6 +1,6 @@
 import { getPlayerProgress, savePlayerProgress } from './progress';
 
-export type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'clang' | 'grab' | 'step' | 'death' | 'clear';
+export type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'clang' | 'grab' | 'step' | 'death' | 'clear' | 'success';
 type Tone = [frequency: number, duration: number, volume: number, type: OscillatorType, endFrequency: number, delay?: number];
 
 const SOUNDS: Record<SoundCue, Tone[]> = {
@@ -18,6 +18,8 @@ const SOUNDS: Record<SoundCue, Tone[]> = {
   grab: [[340, 0.08, 0.04, 'triangle', 420]],
   step: [[150, 0.045, 0.016, 'triangle', 95]],
   death: [[520, 0.18, 0.05, 'square', 300], [390, 0.2, 0.05, 'square', 200, 0.16], [260, 0.4, 0.05, 'triangle', 60, 0.34]],
+  // A quick rising chime for a first success (stage 1's first spin dash kill).
+  success: [[784, 0.08, 0.05, 'triangle', 784], [988, 0.08, 0.05, 'triangle', 988, 0.07], [1319, 0.22, 0.055, 'triangle', 1568, 0.14]],
   clear: [[523, 0.14, 0.05, 'triangle', 523], [659, 0.14, 0.05, 'triangle', 659, 0.12], [784, 0.14, 0.05, 'triangle', 784, 0.24], [1047, 0.38, 0.055, 'triangle', 1047, 0.36]],
 };
 let soundEnabled = getPlayerProgress().soundEnabled;

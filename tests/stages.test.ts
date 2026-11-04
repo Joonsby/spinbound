@@ -259,6 +259,20 @@ test('stage 1 opens on the core loop: an enemy within 3 s, a roll attack and a s
   for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] <= 4800, `gap ${xs[i - 1]}–${xs[i]}`);
 });
 
+test('the first spin dash target stands alone, with a runway and a checkpoint before it', () => {
+  const stage = STAGES[0];
+  const dash = stage.sections!.find((section) => section.keys?.includes('dash'))!;
+  const walkers = (stage.enemyDetails ?? []).filter((enemy) => enemy.kind !== 'fly').sort((a, b) => a.min - b.min);
+  const target = walkers.find((enemy) => enemy.min > dash.x)!;
+  const next = walkers.find((enemy) => enemy.min > target.max)!;
+  assert.ok(next.min - target.max >= 400, `next walker ${next.min - target.max}px after the target`);
+  // Flat ground from the last spike to the target: room to land, read the hint and double-tap.
+  const spike = Math.max(...stage.spikes.filter((x) => x < target.min));
+  assert.ok(target.min - spike >= 600, `${target.min - spike}px from the spike`);
+  const checkpoint = (stage.checkpoints ?? [stage.checkpoint]).find((point) => point.x > spike && point.x < target.min - 40);
+  assert.ok(checkpoint, 'a checkpoint between the spike and the target');
+});
+
 test('progress runs from 0 at the start to 1 at the goal and never drops along the route', () => {
   for (const [index, stage] of STAGES.entries()) {
     const route = routeOf(stage);

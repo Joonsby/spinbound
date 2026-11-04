@@ -142,6 +142,15 @@ export class EnemySystem {
   }
 
   // A dazed charger is the opening to punish, so touching it is harmless.
+  // Stage 1: the enemy that just hurt the robot holds off past its invulnerability and a walker turns away.
+  afterHurting(enemy: Enemy, now: number, playerX: number) {
+    if (!this.onScreenGrace) return;
+    enemy.contactReadyAt = Math.max(enemy.contactReadyAt, now + COMBAT.invulnerableMs + COMBAT.tutorialRehitMs);
+    if (enemy.kind !== 'patrol') return;
+    enemy.direction = enemy.body.center.x < playerX ? -1 : 1;
+    enemy.body.setVelocityX(COMBAT.enemySpeed * enemy.direction);
+  }
+
   canHurt(enemy: Enemy, now: number) {
     return enemy.sprite.active && now >= enemy.contactReadyAt && !(enemy.kind === 'charger' && enemy.state === 'recover');
   }

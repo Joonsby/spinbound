@@ -166,6 +166,7 @@ nav .actions .icon { font-size: 22px; }
 #unlock-equip { --face: var(--primary); --edge: var(--primary-edge); min-height: 50px; width: 100%; color: var(--ink); text-shadow: none; }
 #unlock-keep { --face: var(--panel-deep); --edge: #070c18; min-height: 46px; width: 100%; }
 #result-bonus { margin-top: -6px; }
+#result-tip { display: block; margin: -6px 0 14px; color: var(--cyan); font-size: 13px; line-height: 1.4; white-space: normal; }
 #result-bonus .result-stat { border: 2px solid #b48cff; background: #b48cff26; }
 .rarity-badge { --rarity: #8ea0bc; display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--rarity); color: var(--ink); font-size: 11px; letter-spacing: 1px; }
 #unlock .rarity-badge { background: var(--rarity, #8ea0bc); }

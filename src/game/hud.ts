@@ -4,7 +4,7 @@ import { adsHidden } from '../ads';
 
 const SPEED_STEPS = 24;
 // The status line outlives each stage's Hud, so its flash timer is shared.
-const STATUS_FLASH_MS = 2800;
+export const STATUS_FLASH_MS = 2800;
 let statusFlashTimer: number | undefined;
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -78,6 +78,7 @@ export class Hud {
   readonly reviveSkipButton = element<HTMLButtonElement>('#revive-skip');
   private reward = element('#result-reward');
   private worldBonus = element('#result-bonus');
+  private resultTip = element('#result-tip');
   private unlock = element('#unlock');
   private unlockRarity = element('#unlock-rarity');
   private unlockPortrait = element<HTMLImageElement>('#unlock-portrait');
@@ -231,6 +232,12 @@ export class Hud {
     this.doubleButton.hidden = amount === null || doubled || adsHidden();
     this.doubleButton.disabled = false;
     if (amount !== null) this.reward.replaceChildren(stat('coin-icon', doubled ? '보상 2배 ' : '보상 ', doubled ? amount * 2 : amount, '코인'));
+  }
+
+  // A line under the stats on what to try next (stage 1 failures); null hides it.
+  setResultTip(text: string | null) {
+    this.resultTip.hidden = text === null;
+    this.resultTip.textContent = text ?? '';
   }
 
   // First clear of a world's last stage: bonus coins plus one of every item.

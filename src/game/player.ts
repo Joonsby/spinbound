@@ -23,6 +23,8 @@ export class Player {
   readonly jump = createJumpState();
   readonly dash = createDashState();
   rolling = false;
+  // The current roll began with a spin dash (not a booster).
+  rollFromDash = false;
   // Set while a rope drives the position instead of physics.
   held = false;
   dead = false;
@@ -79,6 +81,7 @@ export class Player {
       if (input.dash !== 0) requestDash(this.dash, input.dash, now);
       if (tryDash(PHYSICS, this.dash, this.run, grounded, now) !== undefined) {
         frame.dashed = true;
+        this.rollFromDash = true;
         this.startRoll(now, PHYSICS.dashMs);
       }
       const direction = dashDirection(this.dash, input.direction, now);
@@ -96,6 +99,7 @@ export class Player {
     this.rolling = nextRolling(PHYSICS, {
       rolling: this.rolling, speed: Math.abs(body.velocity.x), blocked: this.isHurt(now), timeLeft: this.rollUntil - now,
     });
+    if (!this.rolling) this.rollFromDash = false;
     this.lastVy = body.velocity.y;
     return frame;
   }
@@ -112,6 +116,7 @@ export class Player {
   boost(now: number) {
     const direction = Math.abs(this.body.velocity.x) > 20 ? Math.sign(this.body.velocity.x) as -1 | 1 : this.facing;
     this.boostUntil = now + PHYSICS.boostMs;
+    this.rollFromDash = false;
     this.body.setVelocityX(applyBoost(PHYSICS, this.run, direction));
     this.startRoll(now, PHYSICS.rollMs);
   }
