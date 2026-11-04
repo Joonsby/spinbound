@@ -54,7 +54,7 @@ GitHub → Vercel 자동 배포:
 
 - 커밋을 GitHub에 push하면 GitHub Actions가 Node.js 24에서 `npm ci`와 `npm run build:toss`를 실행합니다.
 - Vercel Git 연동은 같은 push의 웹 빌드를 독립적으로 실행합니다. 빌드 실패 시 기존 프로덕션이 유지됩니다.
-- `main`에 push하면 [프로덕션](https://sonic-runner-pi.vercel.app)이 자동 갱신되고, 다른 브랜치는 Preview 배포를 생성합니다.
+- `main`에 push하면 [프로덕션](https://spinbound-eight.vercel.app)이 자동 갱신되고, 다른 브랜치는 Preview 배포를 생성합니다.
 - 로컬 `git add`·커밋만으로는 배포되지 않으며 원격 push가 필요합니다. 별도 Vercel 토큰을 저장소에 넣지 않습니다.
 
 ```sh
