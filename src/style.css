@@ -121,7 +121,7 @@ body[data-screen="menu"] > #danger { display: none; }
 /* Touch pad hugs the screen edges: only the safe area (notch, home bar) or 2px keeps it off them. */
 nav { position: absolute; bottom: max(2px, var(--banner-space)); left: max(2px, var(--safe-left)); right: max(2px, var(--safe-right)); display: flex; justify-content: space-between; pointer-events: none; }
 nav div { display: flex; gap: 10px; }
-nav button { pointer-events: auto; flex-direction: column; gap: 0; width: clamp(54px, 16vw, 70px); height: 62px; font-size: 26px; }
+nav button { pointer-events: auto; flex-direction: column; gap: 0; width: clamp(54px, 16vw, 70px); --pad-h: 62px; font-size: 26px; }
 nav .actions button { --face: var(--primary); --edge: var(--primary-edge); color: var(--ink); text-shadow: none; font-size: 13px; }
 nav .actions .icon { font-size: 22px; }
 #result, #revive { position: absolute; inset: 0; z-index: 10; display: flex; align-items: safe center; justify-content: center; overflow-y: auto; padding: max(36px, var(--safe-top)) max(20px, var(--safe-right)) calc(16px + var(--banner-space)) max(20px, var(--safe-left)); background: #0a1222c7; }
@@ -253,7 +253,7 @@ nav .actions .icon { font-size: 22px; }
 @keyframes unlock-pop { 0% { opacity: 0; transform: scale(0.2) rotate(-25deg); } 60% { opacity: 1; transform: scale(1.15) rotate(6deg); } 100% { opacity: 1; transform: none; } }
 @keyframes rays-in { from { opacity: 0; scale: 0.3; } }
 @keyframes rays-spin { to { rotate: 360deg; } }
-@media (max-height: 420px) { nav button { height: 48px; } header > span { padding: 7px 12px; } #scoreboard { top: calc(12px + var(--safe-top) + var(--host-top-gap)); left: 50%; transform: translateX(-50%); } .result-card { padding: 30px 18px 18px; } .result-card p { margin: 12px 0; } }
+@media (max-height: 420px) { nav button { --pad-h: 48px; } header > span { padding: 7px 12px; } #scoreboard { top: calc(12px + var(--safe-top) + var(--host-top-gap)); left: 50%; transform: translateX(-50%); } .result-card { padding: 30px 18px 18px; } .result-card p { margin: 12px 0; } }
 @media (max-width: 360px) { header { gap: 6px; } header > span { padding: 10px; font-size: 12px; } }
 @media (max-height: 420px) and (max-width: 700px) { #scoreboard { top: calc(67px + var(--safe-top) + var(--host-top-gap)); left: calc(14px + var(--safe-left)); transform: none; } }
 @media (max-height: 420px) { #status { top: calc(94px + var(--safe-top) + var(--host-top-gap)); font-size: 10px; } }
@@ -263,7 +263,7 @@ nav .actions .icon { font-size: 22px; }
   nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
   nav div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 200px; }
   nav .actions { justify-self: end; grid-template-columns: 1fr; max-width: 132px; }
-  nav button { width: 100%; height: 84px; border-radius: 22px; font-size: 32px; }
+  nav button { width: 100%; --pad-h: 84px; border-radius: 22px; font-size: 32px; }
   nav .actions button { font-size: 15px; }
   nav .actions .icon { font-size: 30px; }
 }
@@ -300,8 +300,8 @@ nav .actions .icon { font-size: 22px; }
   #status { top: calc(92px + var(--safe-top) + var(--host-top-gap)); left: 50%; right: auto; transform: translateX(-50%); max-width: calc(100% - 28px - var(--safe-left) - var(--safe-right)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10px; padding: 3px 10px; }
   nav div { max-width: 188px; gap: 8px; }
   nav .actions { max-width: 132px; grid-template-columns: 1fr; }
-  nav button { height: clamp(64px, 22dvh, 84px); }
-  nav .actions button { font-size: 14px; }
+  nav button { --pad-h: clamp(64px, 22dvh, 84px); }
+  nav .actions button { font-size: 14px; line-height: 1.1; }
   .result-card { max-width: 480px; padding: 30px 18px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .result-card h1, .result-card p { grid-column: 1 / -1; margin: 0; }
   #result-next { margin: 0; }
@@ -316,6 +316,10 @@ nav .actions .icon { font-size: 22px; }
   #revive-ad[hidden] + #revive-coins { grid-column: 1 / -1; }
   #revive-skip { grid-column: 1 / -1; margin: 0; }
 }
+/* The pad face stays under the floor the camera rests the robot on (--floor-clear, set in main.ts), so a running robot
+   is never behind a button. The trimmed top stays touchable through ::after, so the touch area keeps its full --pad-h. */
+nav button { --pad-face: max(44px, min(var(--pad-h), calc(var(--floor-clear, 100vh) - 4px - max(2px, var(--banner-space))))); position: relative; height: var(--pad-face); }
+nav button::after { content: ""; position: absolute; left: -3px; right: -3px; bottom: -3px; height: var(--pad-h); }
 /* Icon-only HUD buttons where the top row is short of room; the text stays as the accessible name. */
 @media (orientation: landscape) and (max-height: 600px) and (max-width: 1000px), (max-width: 480px) {
   .hud-button { width: 44px; padding: 0; gap: 0; font-size: 0; }

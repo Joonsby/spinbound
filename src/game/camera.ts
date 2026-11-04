@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { PHYSICS } from './config';
-import { getRenderScale, getViewZoom, LOGICAL_HEIGHT } from '../graphics/display';
+import { getRenderScale, getViewZoom, LOGICAL_HEIGHT, viewZoomFor } from '../graphics/display';
+import { GROUND_TOP } from '../stages';
 
 const MIN_LEAD = 60;
 const MAX_LEAD_RATIO = 0.24;
@@ -13,6 +14,12 @@ const FLOOR_BELOW_CENTER = 0.15;
 // The view only leaves the floor to keep the player between these shares of its height.
 const KEEP_TOP = 0.25;
 const KEEP_BOTTOM = 0.2;
+
+// CSS px from the screen's bottom edge up to the usual floor (GROUND_TOP) at the widest speed zoom. The view rests on the
+// world's bottom edge there, so this is the ground below the floor; the touch pad keeps its face under it (style.css).
+export function floorClearance(cssHeight: number) {
+  return (LOGICAL_HEIGHT - GROUND_TOP) * SPEED_ZOOM_MIN * viewZoomFor(cssHeight) * cssHeight / LOGICAL_HEIGHT;
+}
 
 // Owns the main camera: look-ahead, speed zoom, the clear zoom-in and the render-scale multiplier.
 // Vertically it rests on the floor the player is on, so jumps and ledges do not lift the view.

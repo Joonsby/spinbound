@@ -8,6 +8,7 @@ import { BootScene } from './boot-scene';
 import { MainMenuScene, MenuScreenScene } from './menus';
 import { GameScene } from './game/game-scene';
 import { PHYSICS } from './game/config';
+import { floorClearance } from './game/camera';
 import { installDebugClock } from './game/debug';
 import { getPlayerProgress } from './progress';
 import { configureQuality, renderScaleFor } from './graphics/quality';
@@ -27,6 +28,8 @@ const gameSize = () => {
   const width = Math.max(1, parent.clientWidth || window.innerWidth);
   setRenderScale(renderScaleFor(height));
   setViewZoom(viewZoomFor(height));
+  // Touch pad face height (style.css: nav button).
+  document.documentElement.style.setProperty('--floor-clear', `${floorClearance(height).toFixed(1)}px`);
   const scale = getRenderScale();
   return { width: Math.max(1, Math.round(width / height * LOGICAL_HEIGHT * scale)), height: Math.round(LOGICAL_HEIGHT * scale) };
 };
