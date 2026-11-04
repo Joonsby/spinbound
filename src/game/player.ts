@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COMBAT, PHYSICS } from './config';
-import { applyBoost, createDashState, createJumpState, createRunState, cutJump, dashDirection, nextRolling, noteGrounded, pressJump, resetRun, stepRun, tryDash, tryJump } from './movement';
+import { applyBoost, createDashState, createJumpState, createRunState, cutJump, dashDirection, nextRolling, noteGrounded, pressJump, requestDash, resetRun, stepRun, tryDash, tryJump } from './movement';
 import { createContactBox } from './contact';
 import type { InputFrame } from './input';
 
@@ -76,7 +76,8 @@ export class Player {
     if (now >= this.controlLockUntil) {
       // Read back what physics did last step (walls, recoils) before integrating input.
       this.run.vx = body.velocity.x;
-      if (input.dash !== 0 && tryDash(PHYSICS, this.dash, this.run, input.dash, grounded, now) !== undefined) {
+      if (input.dash !== 0) requestDash(this.dash, input.dash, now);
+      if (tryDash(PHYSICS, this.dash, this.run, grounded, now) !== undefined) {
         frame.dashed = true;
         this.startRoll(now, PHYSICS.dashMs);
       }
@@ -120,6 +121,17 @@ export class Player {
     this.rollUntil = Math.max(this.rollUntil, now + ms);
   }
 
+  // Roll-kill combo: keeps a roll going and, once chained, speeds it up like a short booster.
+  comboBoost(now: number, rollMs: number, boostMs: number, speed: number) {
+    if (!this.rolling) return;
+    this.rollUntil = Math.max(this.rollUntil, now + rollMs);
+    if (boostMs <= 0) return;
+    const direction = Math.abs(this.body.velocity.x) > 20 ? Math.sign(this.body.velocity.x) as -1 | 1 : this.facing;
+    this.boostUntil = Math.max(this.boostUntil, now + boostMs);
+    this.run.vx = direction * Math.max(Math.abs(this.body.velocity.x), speed);
+    this.body.setVelocityX(this.run.vx);
+  }
+
   // Springs, rope releases and stomps: an impulse that a released jump button must not cut.
   launch(now: number, vx: number | undefined, vy: number) {
     if (vx !== undefined) { this.body.setVelocityX(vx); this.run.vx = vx; }
@@ -138,7 +150,7 @@ export class Player {
   recoil(now: number, sourceX: number, speed = COMBAT.recoilSpeed, lift = COMBAT.recoilLift) {
     const direction = this.x < sourceX ? -1 : 1;
     this.rolling = false;
-    this.dash.until = -Infinity;
+    this.dash.until = -Infinity; this.dash.requested = 0;
     resetRun(this.run);
     this.controlLockUntil = now + RECOIL_LOCK_MS;
     this.launch(now, direction * speed, -lift);
@@ -148,7 +160,7 @@ export class Player {
     const direction = this.x < sourceX ? -1 : 1;
     this.rolling = false;
     this.boostUntil = 0;
-    this.dash.until = -Infinity;
+    this.dash.until = -Infinity; this.dash.requested = 0;
     this.hurtUntil = this.controlLockUntil = now + COMBAT.knockbackMs;
     resetRun(this.run);
     this.launch(now, direction * COMBAT.knockbackSpeed, -COMBAT.knockbackLift);
@@ -170,7 +182,7 @@ export class Player {
     this.jump.lastGroundedAt = this.jump.jumpPressedAt = -Infinity;
     this.jump.cuttable = false;
     this.boostUntil = this.rollUntil = this.hurtUntil = this.controlLockUntil = this.groundLockUntil = 0;
-    this.dash.until = this.dash.readyAt = -Infinity;
+    this.dash.until = this.dash.readyAt = -Infinity; this.dash.requested = 0;
     this.invulnerableUntil = now + COMBAT.invulnerableMs;
     this.wasGrounded = false; this.lastVy = 0; this.platformContactAt = -Infinity;
   }
@@ -178,7 +190,7 @@ export class Player {
   stop() {
     resetRun(this.run);
     this.rolling = false;
-    this.dash.until = -Infinity;
+    this.dash.until = -Infinity; this.dash.requested = 0;
     this.body.setVelocity(0, 0);
   }
 }

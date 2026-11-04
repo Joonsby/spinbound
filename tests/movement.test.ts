@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PHYSICS } from '../src/game/config.ts';
-import { applyBoost, createDashState, createJumpState, createRunState, createTapState, cutJump, dashDirection, nextRolling, noteGrounded, pressJump, registerTap, stepRun, tryDash, tryJump } from '../src/game/movement.ts';
+import { applyBoost, createDashState, createJumpState, createRunState, createTapState, cutJump, dashDirection, nextRolling, noteGrounded, pressJump, registerRelease, registerTap, requestDash, stepRun, tryDash, tryJump, type TapState } from '../src/game/movement.ts';
 
 const FRAME = 1000 / 60;
 
@@ -128,23 +128,47 @@ test('variable jump: a tap is clearly lower than a held jump, springs are never 
   assert.equal(apex(1, false), full);
 });
 
-test('a double tap of one direction asks for a spin dash; slow taps or a turn do not', () => {
-  const taps = createTapState();
-  assert.equal(registerTap(PHYSICS, taps, 1, 1000), false);
-  assert.equal(registerTap(PHYSICS, taps, 1, 1000 + PHYSICS.doubleTapMs - 10), true);
-  assert.equal(registerTap(PHYSICS, taps, 1, 1300), false, 'a third tap starts a new pair');
-  assert.equal(registerTap(PHYSICS, taps, -1, 1350), false, 'other direction');
-  assert.equal(registerTap(PHYSICS, taps, -1, 1350 + PHYSICS.doubleTapMs + 1), false, 'too slow');
+// Presses (and releases) of one direction at the given times; true when the last press asks for a dash.
+function taps(state: TapState, events: [number, 'down' | 'up'][], direction: -1 | 1 = 1) {
+  let dash = false;
+  for (const [at, edge] of events) {
+    if (edge === 'up') registerRelease(state, direction, at);
+    else dash = registerTap(PHYSICS, state, direction, at);
+  }
+  return dash;
+}
+
+test('a second press soon after letting go asks for a spin dash; slow taps or a turn do not', () => {
+  const state = createTapState();
+  assert.equal(taps(state, [[1000, 'down'], [1090, 'up'], [1090 + PHYSICS.doubleTapMs - 10, 'down']]), true);
+  assert.equal(taps(state, [[1500, 'up'], [1560, 'down']]), false, 'the press after a dash starts over');
+  assert.equal(taps(createTapState(), [[1000, 'down'], [1090, 'up'], [1090 + PHYSICS.doubleTapMs + 1, 'down']]), false, 'too slow');
+  const turned = createTapState();
+  taps(turned, [[1000, 'down'], [1090, 'up']], 1);
+  assert.equal(taps(turned, [[1150, 'down']], -1), false, 'other direction');
+});
+
+test('thumb-speed double taps and a single flick while running all dash', () => {
+  // Phone thumbs hold a tap for 70–160 ms and come back 80–220 ms later: up to ~380 ms press to press.
+  for (const hold of [70, 120, 160]) {
+    for (const gap of [80, 150, 220]) {
+      assert.equal(taps(createTapState(), [[0, 'down'], [hold, 'up'], [hold + gap, 'down']]), true, `hold ${hold} ms, gap ${gap} ms`);
+    }
+  }
+  // Running: the direction has been held for seconds; one quick lift and press is enough.
+  assert.equal(taps(createTapState(), [[0, 'down'], [3000, 'up'], [3120, 'down']]), true);
 });
 
 test('a spin dash rolls for the dash only, carries without the button and has a cooldown', () => {
   const run = createRunState();
   const dash = createDashState();
-  assert.equal(tryDash(PHYSICS, dash, run, 1, false, 0), undefined, 'ground only');
-  const vx = tryDash(PHYSICS, dash, run, 1, true, 0);
+  requestDash(dash, 1, 0);
+  assert.equal(tryDash(PHYSICS, dash, run, false, 0), undefined, 'ground only');
+  const vx = tryDash(PHYSICS, dash, run, true, 0);
   assert.equal(vx, PHYSICS.dashSpeed);
   assert.ok(PHYSICS.dashSpeed < PHYSICS.sprintSpeed, 'never farther than a full sprint');
   assert.ok(PHYSICS.dashSpeed >= PHYSICS.rollExitSpeed, 'fast enough to smash walls and enemies');
+  assert.equal(tryDash(PHYSICS, dash, run, true, FRAME), undefined, 'one request, one dash');
 
   // Button released right after the double tap: still rolling forward until the dash ends.
   let rolling = true;
@@ -156,7 +180,22 @@ test('a spin dash rolls for the dash only, carries without the button and has a 
   assert.ok(rolling && run.vx > 0);
   assert.equal(nextRolling(PHYSICS, { rolling, speed: PHYSICS.dashSpeed, blocked: false, timeLeft: PHYSICS.dashMs - t }), false, 'the roll ends with the dash');
   assert.equal(dashDirection(dash, 0, PHYSICS.dashMs + 1), 0, 'dash over');
-  assert.equal(tryDash(PHYSICS, dash, run, 1, true, PHYSICS.dashCooldownMs - 1), undefined, 'cooling down');
-  assert.notEqual(tryDash(PHYSICS, dash, run, -1, true, PHYSICS.dashCooldownMs), undefined);
+  requestDash(dash, 1, PHYSICS.dashCooldownMs - PHYSICS.dashBufferMs - 1);
+  assert.equal(tryDash(PHYSICS, dash, run, true, PHYSICS.dashCooldownMs - PHYSICS.dashBufferMs - 1), undefined, 'cooling down');
+  assert.equal(tryDash(PHYSICS, dash, run, true, PHYSICS.dashCooldownMs), undefined, 'a request older than the buffer is dropped');
+  requestDash(dash, -1, PHYSICS.dashCooldownMs);
+  assert.notEqual(tryDash(PHYSICS, dash, run, true, PHYSICS.dashCooldownMs), undefined);
   assert.equal(dashDirection(dash, 1, PHYSICS.dashCooldownMs + FRAME), 1, 'pressing the other way ends the dash');
+});
+
+test('a double tap just before landing dashes on touchdown; a late landing drops it', () => {
+  const run = createRunState();
+  const dash = createDashState();
+  requestDash(dash, 1, 1000);
+  assert.equal(tryDash(PHYSICS, dash, run, false, 1000), undefined, 'still in the air');
+  assert.equal(tryDash(PHYSICS, dash, run, true, 1000 + PHYSICS.dashBufferMs - 20), PHYSICS.dashSpeed);
+
+  const late = createDashState();
+  requestDash(late, 1, 1000);
+  assert.equal(tryDash(PHYSICS, late, createRunState(), true, 1000 + PHYSICS.dashBufferMs + 20), undefined);
 });

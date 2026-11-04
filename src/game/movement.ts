@@ -74,29 +74,44 @@ export function applyBoost(t: MovementTuning, run: RunState, direction: -1 | 1) 
   return run.vx;
 }
 
-export type TapState = { direction: Direction; at: number };
-export type DashState = { direction: Direction; until: number; readyAt: number };
+export type TapState = { direction: Direction; releasedAt: number };
+export type DashState = { direction: Direction; until: number; readyAt: number; requested: Direction; requestedAt: number };
 
 export function createTapState(): TapState {
-  return { direction: 0, at: -Infinity };
+  return { direction: 0, releasedAt: -Infinity };
 }
 
 export function createDashState(): DashState {
-  return { direction: 0, until: -Infinity, readyAt: -Infinity };
+  return { direction: 0, until: -Infinity, readyAt: -Infinity, requested: 0, requestedAt: -Infinity };
 }
 
-// Two presses of the same direction within doubleTapMs ask for a spin dash; a third press starts a new pair.
+// A press of the same direction within doubleTapMs of its last release asks for a spin dash: a quick
+// second tap from a standstill, or one quick flick while running. The press after a dash starts over.
 export function registerTap(t: MovementTuning, taps: TapState, direction: -1 | 1, now: number) {
-  const dash = taps.direction === direction && now - taps.at <= t.doubleTapMs;
+  const dash = taps.direction === direction && now - taps.releasedAt <= t.doubleTapMs;
   taps.direction = dash ? 0 : direction;
-  taps.at = now;
+  taps.releasedAt = -Infinity;
   return dash;
 }
 
+export function registerRelease(taps: TapState, direction: -1 | 1, now: number) {
+  if (taps.direction === direction) taps.releasedAt = now;
+}
+
+export function requestDash(dash: DashState, direction: -1 | 1, now: number) {
+  dash.requested = direction;
+  dash.requestedAt = now;
+}
+
 // Spin dash from the ground: launches straight into a roll and fills sprint momentum, so holding
-// the direction afterwards keeps rolling like a full sprint. Returns the new vx, or undefined.
-export function tryDash(t: MovementTuning, dash: DashState, run: RunState, direction: -1 | 1, grounded: boolean, now: number) {
+// the direction afterwards keeps rolling like a full sprint. A request waits up to dashBufferMs for the
+// ground and the cooldown. Returns the new vx, or undefined.
+export function tryDash(t: MovementTuning, dash: DashState, run: RunState, grounded: boolean, now: number) {
+  if (dash.requested === 0) return undefined;
+  if (now - dash.requestedAt > t.dashBufferMs) { dash.requested = 0; return undefined; }
   if (!grounded || now < dash.readyAt) return undefined;
+  const direction = dash.requested;
+  dash.requested = 0;
   dash.direction = direction;
   dash.until = now + t.dashMs;
   dash.readyAt = now + t.dashCooldownMs;

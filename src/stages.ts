@@ -26,9 +26,12 @@ export type StageData = {
   enemyDetails?: { kind: EnemyKind; x: number; y: number; min: number; max: number }[];
   traps?: [number, number][];
   rewards?: { x: number; y: number; score: number }[];
-  sections?: { x: number; title: string; hint: string }[];
-  // Entering a section pauses the game once to explain it (tutorial stage).
+  // Hints along the stage; keys name what each one explains (ENCOUNTER_HINTS keys and a few of stage 1's own).
+  sections?: { x: number; hint: string; title?: string; keys?: string[] }[];
+  // Tutorial stage: each section's hint flashes once per device without stopping the run.
   tutorial?: boolean;
+  // Chained roll kills speed the roll up and pay bonus coins (COMBO, tried on stage 1).
+  rollCombo?: boolean;
   signs?: { x: number; y: number; text: string; floor?: number }[];
   // Pendulum ropes: anchor point and rope length.
   ropes?: { x: number; y: number; length: number }[];
@@ -63,84 +66,76 @@ function coinArc(stage: StageData, centerX: number, y: number, width: number, he
   }
 }
 
-// Stage 1 teaches one idea per section, in order:
-// move/jump → spring → booster roll → roll attack → stomp → moving platform → rope → breakable wall → all together.
-// A checkpoint sits before every pit so a fall never replays more than one section.
+// Stage 1 is a ~25 s run built on the core loop: a booster roll through three enemies in the first
+// seconds, a spin dash by about 5 s, then a combo line, a spring stomp, a breakable-wall tunnel, a charger
+// and a last combo run to the flag. Hints flash on the status line without stopping the run; ropes and
+// moving platforms wait for later stages, which hint them the first time they come into view.
 const STAGE_ONE: StageData = {
-  theme: 0, name: '새벽 초원의 대모험', width: 12000, tutorial: true,
-  checkpoint: { x: 4700, y: 450 },
-  checkpoints: [{ x: 4700, y: 450 }, { x: 5950, y: 450 }, { x: 7050, y: 450 }, { x: 10000, y: 450 }],
+  theme: 0, name: '새벽 초원의 대모험', width: 7600, tutorial: true, rollCombo: true,
+  checkpoint: { x: 3380, y: 450 },
+  checkpoints: [{ x: 3380, y: 450 }, { x: 5600, y: 450 }],
   platforms: [
-    [1950, 450, 500, 300],
     // Roof of the hidden tunnel; both tunnel ends are breakable walls.
-    [8750, 385, 400, 30],
+    [5040, 385, 400, 30],
   ],
-  oneWayPlatforms: [[800, 395, 180, 18], [4950, 380, 220, 18], [10560, 280, 300, 18]],
-  coins: [], spikes: [620, 1000], enemies: [],
+  coins: [], spikes: [1450], enemies: [],
   enemyDetails: [
-    { kind: 'patrol', x: 3420, y: 462, min: 3340, max: 3500 },
-    { kind: 'patrol', x: 4120, y: 462, min: 4060, max: 4200 },
-    { kind: 'patrol', x: 4360, y: 462, min: 4300, max: 4440 },
-    { kind: 'patrol', x: 4980, y: 462, min: 4880, max: 5080 },
-    { kind: 'fly', x: 5350, y: 390, min: 5250, max: 5450 },
-    { kind: 'fly', x: 5700, y: 390, min: 5600, max: 5800 },
-    { kind: 'patrol', x: 9610, y: 462, min: 9560, max: 9660 },
-    { kind: 'patrol', x: 9810, y: 462, min: 9760, max: 9860 },
-    { kind: 'charger', x: 11400, y: 462, min: 11250, max: 11600 },
+    // The first booster rolls straight through these three.
+    { kind: 'patrol', x: 650, y: 462, min: 600, max: 720 },
+    { kind: 'patrol', x: 870, y: 462, min: 820, max: 940 },
+    { kind: 'patrol', x: 1090, y: 462, min: 1040, max: 1160 },
+    // Spin dash pair, with a runway after the spike jump lands.
+    { kind: 'patrol', x: 2060, y: 462, min: 2010, max: 2110 },
+    { kind: 'patrol', x: 2240, y: 462, min: 2190, max: 2290 },
+    // Combo line after the second booster.
+    { kind: 'patrol', x: 2700, y: 462, min: 2650, max: 2760 },
+    { kind: 'patrol', x: 2890, y: 462, min: 2840, max: 2950 },
+    { kind: 'patrol', x: 3080, y: 462, min: 3030, max: 3140 },
+    // Under the spring's arc: stomp them on the way down. They stay well clear of the pit, so a knock
+    // from one never throws the robot into it.
+    { kind: 'fly', x: 3780, y: 390, min: 3720, max: 3840 },
+    { kind: 'fly', x: 3960, y: 390, min: 3900, max: 4020 },
+    { kind: 'patrol', x: 5420, y: 462, min: 5370, max: 5480 },
+    { kind: 'charger', x: 6050, y: 462, min: 5900, max: 6250 },
+    // Last combo run to the flag.
+    { kind: 'patrol', x: 6800, y: 462, min: 6750, max: 6860 },
+    { kind: 'patrol', x: 6980, y: 462, min: 6930, max: 7040 },
+    { kind: 'patrol', x: 7160, y: 462, min: 7110, max: 7220 },
   ],
-  pads: [[1500, 'spring'], [2650, 'boost'], [3800, 'boost'], [8250, 'boost'], [9420, 'boost'], [10200, 'spring-right']],
-  // Flush with the floor and docking at both edges, so boarding is a matter of timing, not a precise jump.
-  movingPlatforms: [{ x: 6150, y: 490, axis: 'x', min: 6150, max: 6550, speed: 110 }],
-  ropes: [{ x: 7520, y: 130, length: 230 }, { x: 10820, y: 120, length: 230 }],
-  walls: [{ x: 8568, y: 440 }, { x: 8932, y: 440 }],
-  rewards: [{ x: 2120, y: 250, score: 500 }, { x: 8750, y: 440, score: 1000 }, { x: 10640, y: 240, score: 500 }],
+  pads: [[330, 'boost'], [2480, 'boost'], [3560, 'spring'], [4640, 'boost'], [6560, 'boost']],
+  movingPlatforms: [],
+  walls: [{ x: 4858, y: 440 }, { x: 5222, y: 440 }],
+  rewards: [{ x: 5040, y: 440, score: 1000 }],
   sections: [
-    { x: 0, title: '01 · 첫걸음', hint: '← → 이동 · 점프로 가시 넘기 · 멈추지 않고 달리면 탄력이 붙어요' },
-    { x: 1300, title: '02 · 스프링', hint: '주황 스프링을 밟으면 점프보다 훨씬 높이 튀어요' },
-    { x: 2450, title: '03 · 부스터와 구르기', hint: '청록 부스터를 밟으면 잠시 공처럼 굴러요' },
-    { x: 3200, title: '04 · 구르기 공격', hint: '구르는 중 적과 부딪히면 처치 · 이동 버튼 두 번 톡톡이면 바로 스핀 대시' },
-    { x: 4700, title: '05 · 밟기 공격', hint: '적 위로 떨어지면 밟기 · 점프를 누르고 있으면 더 높이 튀어요' },
-    { x: 5900, title: '06 · 움직이는 발판', hint: '발판이 가장자리에 붙을 때 올라타 구덩이를 건너요' },
-    { x: 7000, title: '07 · 줄 매달리기', hint: '점프해서 줄에 닿으면 자동으로 잡아요 · 점프로 놓기' },
-    { x: 8100, title: '08 · 부서지는 벽', hint: '구르면서 금 간 벽에 부딪히면 숨겨진 길이 열려요' },
-    { x: 9300, title: '09 · 종합 질주', hint: '부스터 → 구르기 → 대각 스프링 → 줄 → 깃발까지!' },
+    { x: 0, keys: ['boost'], hint: '부스터를 밟고 굴러서 적을 쓰러뜨려요' },
+    { x: 1300, keys: ['dash'], hint: '같은 방향 두 번 톡톡 » 스핀 대시!' },
+    { x: 2380, keys: ['combo'], hint: '구르며 연달아 쓰러뜨리면 콤보 · 더 빨라져요' },
+    { x: 3450, keys: ['spring', 'fly'], hint: '스프링으로 튀어 올라 위에서 밟아요' },
+    { x: 4500, keys: ['wall'], hint: '구르며 금 간 벽에 부딪히면 숨은 보상!' },
+    { x: 5650, keys: ['charger'], hint: '돌진이 끝난 직후를 노려 두 번 맞혀요' },
+    { x: 6400, keys: ['finale'], hint: '부스터 콤보로 깃발까지 달려요!' },
   ],
   signs: [
-    { x: 300, y: 380, text: '← → 이동 · 점프로 가시 넘기' },
-    { x: 1380, y: 380, text: '스프링 ↑ 높이 점프' },
-    { x: 2520, y: 380, text: '부스터 » 밟으면 잠시 구르기' },
-    { x: 3200, y: 380, text: '구르며 부딪히면 적 처치' },
-    { x: 3780, y: 380, text: '두 번 톡톡 » 스핀 대시' },
-    { x: 4520, y: 380, text: '쭉 달리면 탄력이 붙어 빨라져요' },
-    { x: 5160, y: 330, text: '위에서 떨어지면 밟기 공격' },
-    { x: 6000, y: 300, text: '발판을 타고 건너기' },
-    { x: 7150, y: 300, text: '점프 → 줄 잡기 → 점프로 놓기' },
-    { x: 8130, y: 380, text: '구르기로 금 간 벽 부수기' },
-    { x: 11150, y: 380, text: '돌진이 끝난 직후가 기회!' },
+    { x: 220, y: 380, text: '부스터 » 굴러서 공격' },
+    { x: 1700, y: 380, text: '두 번 톡톡 » 스핀 대시' },
+    { x: 2400, y: 380, text: '연달아 쓰러뜨리면 콤보!' },
+    { x: 3470, y: 380, text: '스프링 ↑ 위에서 밟기' },
+    { x: 4540, y: 380, text: '구르기로 금 간 벽 부수기' },
+    { x: 5700, y: 380, text: '돌진이 끝난 직후가 기회!' },
   ],
 };
-groundRuns(STAGE_ONE, [[0, 1700], [2200, 6100], [6600, 7300], [7750, 10600], [11050, 12000]]);
-coinLine(STAGE_ONE, 200, 520, 440, 80);
-coinArc(STAGE_ONE, 620, 420, 110, 50, 3);
-coinLine(STAGE_ONE, 740, 860, 360, 60);
-coinArc(STAGE_ONE, 1000, 420, 110, 50, 3);
-coinLine(STAGE_ONE, 1100, 1400, 440, 100);
-STAGE_ONE.coins.push([1560, 330], [1640, 260]);
-coinLine(STAGE_ONE, 1760, 2080, 270, 64);
-coinLine(STAGE_ONE, 2750, 3200, 440, 90);
-coinLine(STAGE_ONE, 3560, 3760, 440, 100);
-coinLine(STAGE_ONE, 4500, 4640, 440, 70);
-coinArc(STAGE_ONE, 5350, 340, 120, 30, 3);
-coinArc(STAGE_ONE, 5700, 335, 120, 30, 3);
-coinLine(STAGE_ONE, 6220, 6500, 380, 70);
-STAGE_ONE.coins.push([7420, 320], [7610, 330], [7690, 300]);
-coinLine(STAGE_ONE, 8600, 8900, 340, 60);
-coinLine(STAGE_ONE, 8620, 8700, 440, 40);
-coinLine(STAGE_ONE, 8800, 8880, 440, 40);
-coinLine(STAGE_ONE, 9500, 9900, 440, 100);
-coinLine(STAGE_ONE, 10450, 10690, 245, 60);
-STAGE_ONE.coins.push([10900, 310], [10980, 290]);
-coinLine(STAGE_ONE, 11150, 11750, 440, 100);
+groundRuns(STAGE_ONE, [[0, 4300], [4480, 7600]]);
+coinLine(STAGE_ONE, 450, 1150, 440, 100);
+coinArc(STAGE_ONE, 1450, 420, 110, 50, 3);
+coinLine(STAGE_ONE, 1750, 2300, 440, 90);
+coinLine(STAGE_ONE, 2550, 3150, 440, 100);
+coinArc(STAGE_ONE, 3740, 260, 280, 80, 5);
+coinArc(STAGE_ONE, 4390, 420, 140, 60, 3);
+coinLine(STAGE_ONE, 4900, 5180, 440, 70);
+coinLine(STAGE_ONE, 4880, 5200, 330, 80);
+coinLine(STAGE_ONE, 5500, 5850, 440, 70);
+coinLine(STAGE_ONE, 6300, 6500, 440, 100);
+coinLine(STAGE_ONE, 6700, 7300, 440, 100);
 
 // World 1 is hand-made; worlds 2–10 come from the generator (stage-gen.ts).
 const WORLD_ONE: StageData[] = [

@@ -3,6 +3,9 @@ import { RARITY_LABELS, type Character } from '../characters';
 import { adsHidden } from '../ads';
 
 const SPEED_STEPS = 24;
+// The status line outlives each stage's Hud, so its flash timer is shared.
+const STATUS_FLASH_MS = 2800;
+let statusFlashTimer: number | undefined;
 
 const element = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
@@ -84,7 +87,6 @@ export class Hud {
   readonly unlockKeepButton = element<HTMLButtonElement>('#unlock-keep');
   private revive = element('#revive');
   private reviveInfo = element('#revive-info');
-  private tip = element('#tip');
   private pause = element('#pause-menu');
   private pauseCard = element('.pause-card');
   private pauseStage = element('#pause-stage');
@@ -94,10 +96,6 @@ export class Hud {
   readonly pauseButton = element<HTMLButtonElement>('#pause');
   readonly resumeButton = element<HTMLButtonElement>('#pause-resume');
   readonly tipsResetButton = element<HTMLButtonElement>('#pause-tips');
-  private tipStep = element('#tip-step');
-  private tipTitle = element('#tip-title');
-  private tipText = element('#tip-text');
-  readonly tipButton = element<HTMLButtonElement>('#tip-continue');
   private shownSpeed = -1;
   private shownRolling: boolean | undefined;
   private shownStatus = '';
@@ -119,6 +117,15 @@ export class Hud {
     if (text === this.shownStatus) return;
     this.shownStatus = text;
     this.status.textContent = text;
+  }
+
+  // Hints and combos: the status line stands out for a moment while the run goes on.
+  flashStatus() {
+    window.clearTimeout(statusFlashTimer);
+    delete this.status.dataset.flash;
+    void this.status.offsetWidth; // restarts the pop animation
+    this.status.dataset.flash = '';
+    statusFlashTimer = window.setTimeout(() => { delete this.status.dataset.flash; }, STATUS_FLASH_MS);
   }
 
   setScore(points: number, coins: number) {
@@ -255,21 +262,6 @@ export class Hud {
     openModal(this.revive);
     [this.reviveAdButton, this.reviveCoinButton, this.reviveSkipButton].find((button) => !button.hidden && !button.disabled)?.focus({ preventScroll: true });
   }
-
-  // Tutorial card over the paused game; the hint's " · " parts become separate lines.
-  showTip(step: number, total: number, title: string, hint: string) {
-    this.tipStep.textContent = `TIP ${step} / ${total}`;
-    this.tipTitle.textContent = title;
-    this.tipText.replaceChildren(...hint.split(' · ').map((line) => {
-      const item = document.createElement('li');
-      item.textContent = line;
-      return item;
-    }));
-    openModal(this.tip);
-    this.tipButton.focus({ preventScroll: true });
-  }
-
-  hideTip() { closeModal(this.tip); }
 
   hideRevive() { closeModal(this.revive); }
 

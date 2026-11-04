@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PHYSICS } from '../src/game/config.ts';
+import { applyBoost, createRunState, stepRun } from '../src/game/movement.ts';
 import { GROUND_TOP, STAGES, type StageData } from '../src/stages.ts';
 import { routeOf, routeProgress } from '../src/stage-gen.ts';
 
@@ -194,8 +195,10 @@ test('100 stages in 10 worlds, each generated world ending in a finale', () => {
   assert.ok(STAGES.some((stage) => stage.goal && stage.start && stage.goal.y > stage.start.y + 200));
 });
 
-test('every stage is about as long as stage 1', () => {
+// Stage 1 is a short opener (tested below); every other stage is a full-length run.
+test('every stage after stage 1 runs at least 10000px', () => {
   for (const [index, stage] of STAGES.entries()) {
+    if (index === 0) continue;
     // Path length: the width once per storey that has a long floor.
     const storeys = new Set(stage.platforms.filter(([, , width]) => width >= 500).map(([, y, , height]) => y - height / 2)).size;
     assert.ok(stage.width * storeys >= 10000, `stage ${index + 1}: ${stage.width}px × ${storeys}`);
@@ -216,9 +219,42 @@ test('checkpoints come in the order a run reaches them, about every 3000px on a 
   }
 });
 
-test('stage 1 is a short session: at most ~12k px with checkpoints every ≤ 3k px', () => {
+// Seconds to reach each x holding right on flat ground; boosters fire as the robot passes them.
+function runTimes(stage: StageData) {
+  const frameMs = 1000 / 60;
+  const run = createRunState();
+  const boosts = stage.pads.filter(([, kind]) => kind === 'boost').map(([x]) => x);
+  const passed = new Set<number>();
+  const points: [number, number][] = [];
+  let x = stage.start?.x ?? 90;
+  let t = 0;
+  let boostedUntil = -1;
+  while (x < stage.width && t < 120) {
+    for (const boost of boosts) if (!passed.has(boost) && x >= boost) { passed.add(boost); applyBoost(PHYSICS, run, 1); boostedUntil = t + PHYSICS.boostMs / 1000; }
+    stepRun(PHYSICS, run, 1, true, t < boostedUntil, frameMs);
+    x += run.vx * frameMs / 1000;
+    t += frameMs / 1000;
+    points.push([x, t]);
+  }
+  return (target: number) => points.find(([px]) => px >= target)?.[1] ?? Infinity;
+}
+
+test('stage 1 opens on the core loop: an enemy within 3 s, a roll attack and a spin dash within 10 s, a short run to the flag', () => {
   const stage = STAGES[0];
-  assert.ok(stage.width <= 12000);
+  const at = runTimes(stage);
+  const walkers = (stage.enemyDetails ?? []).filter((enemy) => enemy.kind !== 'fly').sort((a, b) => a.min - b.min);
+  assert.ok(at(walkers[0].min - 40) <= 3, `first enemy at ${at(walkers[0].min - 40).toFixed(1)} s`);
+  // The first booster comes before it, and its roll carries into it.
+  const boost = stage.pads.find(([, kind]) => kind === 'boost')![0];
+  assert.ok(boost < walkers[0].min && walkers[0].min - boost <= PHYSICS.boostSpeed * PHYSICS.rollMs / 1000);
+  const dash = stage.sections!.find((section) => section.keys?.includes('dash'))!;
+  const dashTarget = walkers.find((enemy) => enemy.min > dash.x)!;
+  assert.ok(at(dashTarget.min) <= 10, `spin dash target at ${at(dashTarget.min).toFixed(1)} s`);
+  // Holding right with no fights; jumps, the spring, the charger and first-time hesitation add to a 20–40 s play.
+  const flag = at(stage.width - 130);
+  assert.ok(flag >= 18 && flag <= 32, `${flag.toFixed(1)} s holding right`);
+  assert.equal(stage.ropes?.length ?? 0, 0, 'no waiting on ropes');
+  assert.equal(stage.movingPlatforms.length, 0, 'no waiting on platforms');
   const xs = [0, ...(stage.checkpoints ?? []).map((point) => point.x), stage.width];
   for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] <= 4800, `gap ${xs[i - 1]}–${xs[i]}`);
 });

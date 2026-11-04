@@ -31,10 +31,26 @@ export const PHYSICS = {
   dashSpeed: 340,
   dashMs: 450,
   dashCooldownMs: 900,
+  // The second press counts from the last release of that direction, so a running thumb needs one quick flick;
+  // a double tap just before landing waits dashBufferMs for the ground.
   doubleTapMs: 260,
+  dashBufferMs: 150,
   maxStepMs: 50,
 };
 export type MovementTuning = typeof PHYSICS;
+
+// Roll-kill combo (tried on stage 1, StageData.rollCombo): roll kills within windowMs of each other chain.
+// Every roll kill keeps the roll going a little longer; from the second on it also speeds the roll up and pays coins.
+export const COMBO = {
+  windowMs: 1600,
+  rollExtendMs: 700,
+  boostMs: 900,
+  baseSpeed: 420,
+  speedPerStep: 20,
+  maxSpeed: 470,
+  maxBonusCoins: 4,
+};
+export type ComboTuning = typeof COMBO;
 
 // HP is stored in hits (a plain hit costs 1); screens show it in points.
 export const HP_POINTS = 100;

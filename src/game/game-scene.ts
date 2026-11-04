@@ -19,7 +19,7 @@ import { robotPortraitUrl } from '../graphics/robot-art';
 import type { Character } from '../characters';
 import { showRewardedAd } from '../ads';
 import { confirmDialog } from '../confirm-dialog';
-import { BOOSTS, COMBAT, ECONOMY, GIMMICK, HP_POINTS, PHYSICS } from './config';
+import { BOOSTS, COMBAT, COMBO, ECONOMY, GIMMICK, HP_POINTS, PHYSICS } from './config';
 import { clearReward, reviveOffer, worldBonus } from './economy';
 import { routeOf, routeProgress, routeSpot, STAGES_PER_WORLD, worldOf } from '../stage-gen';
 import { classifyContact, createContactBox, type ContactRules } from './contact';
@@ -39,7 +39,8 @@ import { BreakableWalls } from './mechanics/breakable-walls';
 import { DragonChase, ThiefRun } from './mechanics/chasers';
 import { createChaseArt } from '../graphics/chase-art';
 import { installDebugHooks } from './debug';
-import { markTipSeen, resetTips, seenTips } from './tutorial';
+import { encounterSpots, ENCOUNTER_HINTS, markHintsSeen, resetHints, seenHints, type EncounterKey } from './tutorial';
+import { breakCombo, createComboState, registerRollKill } from './combo';
 
 const START = { x: 90, y: 440 };
 const CRYSTAL_IDLE_TINT = 0x8fa3b8;
@@ -82,13 +83,14 @@ export class GameScene extends Phaser.Scene {
   private reward = 0;
   private rewardDoubled = false;
   private adOpen = false;
-  private tipOpen = false;
   private pauseOpen = false;
   private confirmOpen = false;
   private unlocks: Character[] = [];
-  private tipOpenedAt = 0;
   private frameInput: InputFrame = { direction: 0, jumpPressed: false, jumpHeld: false, dash: 0 };
   private targetBox = createContactBox();
+  private combo = createComboState();
+  // Mechanics whose one-time hint fires when they first come into view (stages without their own hints).
+  private encounters: { key: EncounterKey; x: number; y: number; shown: boolean }[] = [];
   private hud!: Hud;
   private controls!: InputController;
   private audio!: GameAudio;
@@ -142,7 +144,7 @@ export class GameScene extends Phaser.Scene {
     this.reward = 0;
     this.rewardDoubled = false;
     this.adOpen = false;
-    this.tipOpen = false;
+    this.combo = createComboState();
     this.pauseOpen = false;
     this.confirmOpen = false;
     this.unlocks = [];
@@ -204,20 +206,17 @@ export class GameScene extends Phaser.Scene {
     this.enemies = new EnemySystem(this, enemyConfigs, this.stageIndex === 0, worldOf(this.stageIndex));
     this.physics.add.overlap(this.player.sprite, this.enemies.group, (_player, object) => this.touchEnemy(object));
     this.startMode(stage, spawn.x);
+    this.encounters = stage.tutorial ? [] : encounterSpots(stage).map((spot) => ({ ...spot, shown: false }));
 
     this.cameraControl = new CameraController(this.cameras.main, this.player.sprite, stage.width, worldTop);
     this.cameraControl.follow(spawn.x, spawn.y);
     const onRenderScale = () => this.cameraControl.apply();
     this.game.events.on(RENDER_SCALE_EVENT, onRenderScale);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render, this);
-    const tip = document.querySelector<HTMLElement>('#tip')!;
-    const onTipClick = () => this.closeTip();
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || this.confirmOpen) return;
-      if (this.tipOpen) { if (['Space', 'Enter', 'Escape'].includes(event.code)) this.closeTip(); }
-      else if (event.code === 'Escape' || event.code === 'KeyP') { if (this.pauseOpen) this.closePause(); else this.openPause(); }
+      if (event.code === 'Escape' || event.code === 'KeyP') { if (this.pauseOpen) this.closePause(); else this.openPause(); }
     };
-    tip.addEventListener('click', onTipClick);
     document.addEventListener('keydown', onKey);
     // Leaving the app mid-run opens the pause menu, so it waits for the player on return.
     const unbindEnvironment = bindAppEnvironment(this, () => this.resetInput(),
@@ -245,10 +244,8 @@ export class GameScene extends Phaser.Scene {
       this.hud.nextButton.onclick = null;
       for (const id of ['restart', 'result-restart', 'lobby', 'result-lobby', 'result-double', 'revive-ad', 'revive-coins', 'revive-skip', 'unlock-equip', 'unlock-keep', 'pause', 'pause-resume', 'pause-tips']) document.querySelector<HTMLButtonElement>(`#${id}`)!.onclick = null;
       this.hud.hideResult();
-      this.hud.hideTip();
       // The animation manager is shared by every scene.
-      if (this.tipOpen || this.pauseOpen) this.anims.resumeAll();
-      tip.removeEventListener('click', onTipClick);
+      if (this.pauseOpen) this.anims.resumeAll();
       document.removeEventListener('keydown', onKey);
     });
     this.bindButtons();
@@ -378,7 +375,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.unlockKeepButton.onclick = () => this.nextUnlock();
     this.hud.pauseButton.onclick = () => this.openPause();
     this.hud.resumeButton.onclick = () => this.closePause();
-    this.hud.tipsResetButton.onclick = () => { resetTips(); this.hud.tipsResetButton.disabled = true; };
+    this.hud.tipsResetButton.onclick = () => { resetHints(); this.hud.tipsResetButton.disabled = true; };
     button('lobby').onclick = () => { void this.confirmLeave('home'); };
     button('result-lobby').onclick = () => this.returnToLobby();
     this.hud.doubleButton.onclick = () => { void this.doubleReward(); };
@@ -444,9 +441,22 @@ export class GameScene extends Phaser.Scene {
       this.rig.event('happy');
       this.effects.popup(x, y - 28, `+${COMBAT.enemyScore}`);
       this.enemyScore += COMBAT.enemyScore;
+      if (contact === 'roll' && STAGES[this.stageIndex].rollCombo) this.rollCombo(x, y, now);
       this.updateScore();
       this.hitStop(COMBAT.hitStopMs);
     }
+  }
+
+  // Trial on stage 1: chained roll kills keep the roll going, speed it up and pay bonus coins.
+  private rollCombo(x: number, y: number, now: number) {
+    const reward = registerRollKill(COMBO, this.combo, now);
+    this.player.comboBoost(now, reward.rollMs, reward.boostMs, reward.speed);
+    if (reward.count < 2) return;
+    this.coinCount += reward.bonusCoins;
+    this.effects.popup(x, y - 56, `${reward.count} COMBO!`);
+    this.audio.play('coin');
+    this.hud.setStatus(`${reward.count} 콤보! 속도 UP · 코인 +${reward.bonusCoins}`);
+    this.hud.flashStatus();
   }
 
   private onPad(kind: PadKind, x: number, y: number) {
@@ -575,6 +585,7 @@ export class GameScene extends Phaser.Scene {
 
   private takeHit(sourceX: number) {
     if (!this.loseHp()) return false;
+    breakCombo(this.combo);
     if (!this.finished) {
       this.detachRopes();
       this.player.knockback(this.time.now, sourceX);
@@ -688,25 +699,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // Freezes the stage (physics, tweens, animations) while a tutorial tip is read.
-  private openTip(index: number) {
-    const sections = STAGES[this.stageIndex].sections!;
-    const { title, hint } = sections[index];
-    markTipSeen(index);
-    this.tipOpen = true;
-    this.tipOpenedAt = performance.now();
-    this.freeze();
-    this.hud.showTip(index + 1, sections.length, title.split(' · ').pop()!, hint);
+  // One-time hint: flashes on the status line once per device, without stopping the run.
+  private flashHint(keys: string[], text: string) {
+    const seen = seenHints();
+    if (keys.every((key) => seen.has(key))) return;
+    markHintsSeen(keys);
+    this.hud.setStatus(text);
+    this.hud.flashStatus();
   }
 
-  private closeTip() {
-    // A tap already under way when the tip opened must not dismiss it at once.
-    if (!this.tipOpen || performance.now() - this.tipOpenedAt < 350) return;
-    this.tipOpen = false;
-    this.hud.hideTip();
-    this.unfreeze();
-  }
-
+  // Freezes the stage (physics, tweens, animations) while the pause menu is open.
   private freeze() {
     this.resetInput();
     this.physics.pause();
@@ -723,7 +725,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openPause() {
-    if (this.finished || this.tipOpen || this.pauseOpen || this.adOpen) return;
+    if (this.finished || this.pauseOpen || this.adOpen) return;
     this.pauseOpen = true;
     this.freeze();
     this.audio.pauseForBackground();
@@ -799,7 +801,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    if (this.finished || this.tipOpen || this.pauseOpen) return;
+    if (this.finished || this.pauseOpen) return;
     const now = this.time.now;
     if (this.hitStopUntil) {
       if (now < this.hitStopUntil) return;
@@ -833,17 +835,25 @@ export class GameScene extends Phaser.Scene {
     this.enemies.update(now, view, player.x, player.y, Math.abs(player.body.velocity.x));
     if (this.updateMode(now, delta)) return;
     if (this.magnet) this.pullCoins();
-    const sections = STAGES[this.stageIndex].sections;
+    const stage = STAGES[this.stageIndex];
+    const sections = stage.sections;
     if (sections) {
       let sectionIndex = 0;
       for (let i = 1; i < sections.length; i++) if (player.x >= sections[i].x) sectionIndex = i;
       if (sectionIndex !== this.currentSection) {
         this.currentSection = sectionIndex;
-        this.hud.setStatus(`${sections[sectionIndex].title} · ${sections[sectionIndex].hint}`);
-        if (STAGES[this.stageIndex].tutorial && !seenTips().has(sectionIndex)) this.openTip(sectionIndex);
+        const section = sections[sectionIndex];
+        const text = section.title ? `${section.title} · ${section.hint}` : section.hint;
+        this.hud.setStatus(text);
+        if (stage.tutorial) this.flashHint(section.keys ?? [`section-${sectionIndex}`], text);
       }
     }
-    const right = STAGES[this.stageIndex].width - 15;
+    for (const spot of this.encounters) {
+      if (spot.shown || !Phaser.Geom.Rectangle.Contains(view, spot.x, spot.y)) continue;
+      spot.shown = true;
+      this.flashHint([spot.key], ENCOUNTER_HINTS[spot.key]);
+    }
+    const right = stage.width - 15;
     if (player.sprite.x > right) {
       player.sprite.x = right;
       player.body.setVelocityX(Math.min(0, player.body.velocity.x));
@@ -857,7 +867,7 @@ export class GameScene extends Phaser.Scene {
 
   // POST_UPDATE: physics has settled, so sprites, effects and HUD read final positions.
   private render(_time: number, delta: number) {
-    if (this.tipOpen || this.pauseOpen) return;
+    if (this.pauseOpen) return;
     const now = this.time.now;
     const { player } = this;
     this.effects.update(delta);
