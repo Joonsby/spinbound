@@ -27,7 +27,7 @@ export type Enemy = {
   nextHitAt: number;
 };
 
-export type DamageResult = 'defeated' | 'hit' | 'ignored';
+type DamageResult = 'defeated' | 'hit' | 'ignored';
 
 // Spawning, patrol/fly/charger/hopper AI and defeat handling. Contact rules live in contact.ts.
 // The world picks which monsters play each behaviour (monster-art.ts).

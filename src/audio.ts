@@ -1,6 +1,6 @@
 import { getPlayerProgress, savePlayerProgress } from './progress';
 
-export type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'clang' | 'grab' | 'step' | 'death' | 'clear' | 'success';
+type SoundCue = 'jump' | 'land' | 'roll' | 'coin' | 'enemy' | 'hurt' | 'spring' | 'boost' | 'stomp' | 'break' | 'clang' | 'grab' | 'step' | 'death' | 'clear' | 'success';
 type Tone = [frequency: number, duration: number, volume: number, type: OscillatorType, endFrequency: number, delay?: number];
 
 const SOUNDS: Record<SoundCue, Tone[]> = {

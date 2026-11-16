@@ -10,7 +10,7 @@ import type { EnemyKind } from '../stages';
 
 type Ctx = CanvasRenderingContext2D;
 
-export const ENEMY_KEYS = {
+const ENEMY_KEYS = {
   alert: 'enemy-alert',
   dizzy: 'enemy-dizzy',
 };
@@ -36,7 +36,7 @@ export function createEnemyArt(scene: Phaser.Scene) {
 
 const fit = (image: Phaser.GameObjects.Image, scale = 1) => image.setScale(scale / artScale(image.texture.key));
 
-export type EnemyPose = { now: number; x: number; bottom: number; centerY: number; groundY: number; vx: number; facing: number; state: 'idle' | 'windup' | 'charge' | 'recover' };
+type EnemyPose = { now: number; x: number; bottom: number; centerY: number; groundY: number; vx: number; facing: number; state: 'idle' | 'windup' | 'charge' | 'recover' };
 
 // Parts and tweens only, no frame swaps: the shapes stay identical while they bob, flap, hop and lean.
 export class EnemyVisual {

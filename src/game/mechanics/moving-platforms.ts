@@ -5,7 +5,7 @@ import type { VisualSync } from '../visual-sync';
 import { PROP_KEYS } from '../../graphics/props-art';
 import { DEPTH } from '../../graphics/depth';
 
-export type MovingPlatformConfig = { x: number; y: number; axis: 'x' | 'y'; min: number; max: number; speed?: number };
+type MovingPlatformConfig = { x: number; y: number; axis: 'x' | 'y'; min: number; max: number; speed?: number };
 type Platform = MovingPlatformConfig & { sprite: Phaser.GameObjects.Rectangle; body: Phaser.Physics.Arcade.Body; speed: number };
 
 // One-way moving platforms. Remembers which one the player stands on for take-off momentum.

@@ -4,11 +4,11 @@
 // is a bot run, and a script that only fires DOM events sets window.__spinboundPlaytest.source = 'bot'.
 // Production builds compile createPlaytest() to `undefined`, so none of this ships.
 
-export type PlaytestSource = 'human' | 'bot';
-export type PlaytestEvent = 'contact' | 'roll-kill' | 'dash' | 'dash-kill' | 'hit' | 'death' | 'respawn' | 'combo' | 'bonus-coins';
+type PlaytestSource = 'human' | 'bot';
+type PlaytestEvent = 'contact' | 'roll-kill' | 'dash' | 'dash-kill' | 'hit' | 'death' | 'respawn' | 'combo' | 'bonus-coins';
 type Spot = { at: number; x: number; cause: string };
 
-export type PlaytestRecord = {
+type PlaytestRecord = {
   source: PlaytestSource;
   stage: number;
   // Tries of this stage since its last clear in this page session, this one included.

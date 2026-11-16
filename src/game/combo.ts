@@ -2,8 +2,8 @@ import type { ComboTuning } from './config';
 
 // Engine-free roll-kill combo. The scene reports each enemy a roll defeats and applies the reward.
 
-export type ComboState = { count: number; lastAt: number };
-export type ComboReward = { count: number; rollMs: number; boostMs: number; speed: number; bonusCoins: number };
+type ComboState = { count: number; lastAt: number };
+type ComboReward = { count: number; rollMs: number; boostMs: number; speed: number; bonusCoins: number };
 
 export function createComboState(): ComboState {
   return { count: 0, lastAt: -Infinity };

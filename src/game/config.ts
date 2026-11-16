@@ -84,7 +84,6 @@ export const COMBAT = {
   hopHeight: 64,
   hopSpeed: 95,
 };
-export type CombatTuning = typeof COMBAT;
 
 // Coins kept between plays (the lobby balance).
 export const ECONOMY = {

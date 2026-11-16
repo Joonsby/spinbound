@@ -5,14 +5,14 @@ import type { MovementTuning } from './config';
 
 export type Direction = -1 | 0 | 1;
 
-export type RunState = {
+type RunState = {
   vx: number;
   // Extra speed cap earned by holding one direction on the ground (0 … sprintSpeed - runSpeed).
   sprint: number;
   sprintHeldMs: number;
 };
 
-export type JumpState = {
+type JumpState = {
   lastGroundedAt: number;
   jumpPressedAt: number;
   // Only a player jump can be cut short; springs, ropes and stomps keep their impulse.
@@ -31,7 +31,7 @@ function approach(value: number, target: number, step: number) {
   return value < target ? Math.min(target, value + step) : Math.max(target, value - step);
 }
 
-export function speedCap(t: MovementTuning, run: RunState, boosted: boolean) {
+function speedCap(t: MovementTuning, run: RunState, boosted: boolean) {
   return boosted ? t.boostSpeed : t.runSpeed + run.sprint;
 }
 
@@ -75,7 +75,7 @@ export function applyBoost(t: MovementTuning, run: RunState, direction: -1 | 1) 
 }
 
 export type TapState = { direction: Direction; releasedAt: number };
-export type DashState = { direction: Direction; until: number; readyAt: number; requested: Direction; requestedAt: number };
+type DashState = { direction: Direction; until: number; readyAt: number; requested: Direction; requestedAt: number };
 
 export function createTapState(): TapState {
   return { direction: 0, releasedAt: -Infinity };
@@ -154,7 +154,7 @@ export function cutJump(t: MovementTuning, jump: JumpState, vy: number, held: bo
   return Math.max(vy, -t.jumpCutSpeed);
 }
 
-export type RollCheck = { rolling: boolean; speed: number; blocked: boolean; timeLeft: number };
+type RollCheck = { rolling: boolean; speed: number; blocked: boolean; timeLeft: number };
 
 // A roll never starts here (boosters and spin dashes start it); it ends when its time runs out,
 // when it slows below rollExitSpeed or on a hit. A roll that leaves the ground stays a spin attack.

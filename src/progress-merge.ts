@@ -1,7 +1,7 @@
 import type { PlayerProgress } from './progress';
 
 // What the cloud copy holds: everything except settings that belong to one device.
-export type SyncedProgress = Omit<PlayerProgress, 'soundEnabled' | 'graphicsQuality'>;
+type SyncedProgress = Omit<PlayerProgress, 'soundEnabled' | 'graphicsQuality'>;
 
 export const toSynced = (value: PlayerProgress): SyncedProgress => ({
   version: value.version,

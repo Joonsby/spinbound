@@ -1,9 +1,9 @@
 // Graphics quality presets. Only visuals change with quality; physics and collision never do.
 
-export type QualityLevel = 'low' | 'medium' | 'high';
+type QualityLevel = 'low' | 'medium' | 'high';
 export type QualitySetting = QualityLevel | 'auto';
 
-export type QualityPreset = {
+type QualityPreset = {
   // Upper bound for canvas pixels per logical pixel (actual value also depends on screen size × DPR).
   maxRenderScale: number;
   // Texture pixels per logical pixel for code-painted art (@2x art = 2).
@@ -16,7 +16,7 @@ export type QualityPreset = {
   foreground: boolean;
 };
 
-export const QUALITY_PRESETS: Record<QualityLevel, QualityPreset> = {
+const QUALITY_PRESETS: Record<QualityLevel, QualityPreset> = {
   low: { maxRenderScale: 1, textureScale: 1, particles: 32, ghosts: 3, ambient: 0, backgroundLayers: 3, decorations: false, foreground: false },
   medium: { maxRenderScale: 1.5, textureScale: 2, particles: 64, ghosts: 5, ambient: 8, backgroundLayers: 4, decorations: true, foreground: true },
   high: { maxRenderScale: 2, textureScale: 2, particles: 96, ghosts: 6, ambient: 16, backgroundLayers: 5, decorations: true, foreground: true },
@@ -27,7 +27,7 @@ let setting: QualitySetting = 'auto';
 let level: QualityLevel = detectQuality();
 
 // Rough device tier; the in-game FPS watchdog lowers it further when needed.
-export function detectQuality(): QualityLevel {
+function detectQuality(): QualityLevel {
   const memory = (navigator as { deviceMemory?: number }).deviceMemory ?? 4;
   const cores = navigator.hardwareConcurrency || 4;
   if (memory <= 2 || cores <= 2) return 'low';

@@ -5,7 +5,7 @@ import { DEPTH } from './depth';
 import { quality } from './quality';
 import type { StageTheme } from './themes';
 
-export type Rect = { left: number; right: number; top: number; bottom: number };
+type Rect = { left: number; right: number; top: number; bottom: number };
 
 const SIDE_WIDTH = 14;
 const SCREEN_BOTTOM = 600;

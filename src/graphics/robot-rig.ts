@@ -6,7 +6,7 @@ import { DEPTH } from './depth';
 // Parts-based robot. Part shapes never change between frames: only position, rotation, scale
 // and the eye texture do, so swapping in delivered PNG parts keeps every animation intact.
 
-export type RigState = {
+type RigState = {
   now: number;
   deltaMs: number;
   x: number;
@@ -27,7 +27,7 @@ export type RigState = {
   ropeTilt: number;
 };
 
-export type RigEvent = 'jump' | 'land' | 'spring' | 'grab' | 'release' | 'hurt' | 'happy';
+type RigEvent = 'jump' | 'land' | 'spring' | 'grab' | 'release' | 'hurt' | 'happy';
 
 const STRIDE = 44;
 const SPRING_STIFFNESS = 260;

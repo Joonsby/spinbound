@@ -1,8 +1,8 @@
 // Daily attendance: one claim per local calendar day. The weekly rewards repeat; robots come at
 // set totals of days (CHARACTERS with an 'attendance' unlock). Pure data for the Node tests.
 
-export type AttendanceItem = 'shield' | 'extra-heart' | 'magnet';
-export type AttendanceReward = { coins: number; items: AttendanceItem[]; label: string; icon: string };
+type AttendanceItem = 'shield' | 'extra-heart' | 'magnet';
+type AttendanceReward = { coins: number; items: AttendanceItem[]; label: string; icon: string };
 export type Attendance = { last: string; days: number };
 
 const reward = (coins: number, items: AttendanceItem[], label: string, icon: string): AttendanceReward => ({ coins, items, label, icon });

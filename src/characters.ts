@@ -2,8 +2,8 @@
 // Pure data (no Phaser): progress validation and the Node tests import it.
 import { STAGES_PER_WORLD } from './stage-gen.ts';
 
-export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
-export type Unlock =
+type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
+type Unlock =
   | { kind: 'start' }
   // First clear of this stage (1-based) unlocks it automatically.
   | { kind: 'clear'; stage: number }

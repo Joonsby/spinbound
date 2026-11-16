@@ -11,7 +11,7 @@ type Ctx = CanvasRenderingContext2D;
 type Palette = readonly [string, string, string];
 type Paint = (ctx: Ctx) => void;
 type Part = { width: number; height: number; ox: number; oy: number; paint: Paint };
-export type Wings = Part & { anchors: [number, number, boolean][]; motion: 'flap' | 'spin'; amp: number; speed: number };
+type Wings = Part & { anchors: [number, number, boolean][]; motion: 'flap' | 'spin'; amp: number; speed: number };
 export type Species = { id: string; body: Part; wings?: Wings };
 
 const shade = (ctx: Ctx, x: number, y: number, r: number, [light, base, dark]: Palette) =>
@@ -841,7 +841,7 @@ const flyer = (id: string, width: number, height: number, paint: Paint, wings?: 
 const batWings = (palette: Palette) => ({ width: 26, height: 20, pivot: [2, 8] as [number, number], paint: batWing(palette), anchors: [[-8, -2, true], [8, -2, false]] as [number, number, boolean][], motion: 'flap' as const, amp: 32, speed: 18 });
 const birdWings = (palette: Palette) => ({ width: 24, height: 16, pivot: [21, 12] as [number, number], paint: birdWing(palette), anchors: [[0, -1, false]] as [number, number, boolean][], motion: 'flap' as const, amp: 38, speed: 14 });
 
-export const SPECIES: Record<string, Species> = Object.fromEntries([
+const SPECIES: Record<string, Species> = Object.fromEntries([
   ground('slime', 44, 36, slime(GREEN)),
   ground('slime-violet', 44, 36, slime(['#E2C8FF', '#A87AE8', '#6A4AB0'])),
   ground('slime-cosmic', 44, 36, slime(['#B8E8FF', '#5A8AE8', '#2E3A9A'])),
@@ -900,7 +900,7 @@ const ROSTERS: Record<EnemyKind, string[]>[] = [
   { patrol: ['starling', 'slime-cosmic'], fly: ['ghost-cosmic', 'wisp-blue'], charger: ['rhino-cosmic'], hopper: ['bunny-star'] },
 ];
 
-export const rosterFor = (world: number) => ROSTERS[Math.min(ROSTERS.length, Math.max(1, world)) - 1];
+const rosterFor = (world: number) => ROSTERS[Math.min(ROSTERS.length, Math.max(1, world)) - 1];
 
 // The `index`-th monster of this behaviour in a stage of `world`.
 export function speciesFor(kind: EnemyKind, world: number, index: number) {

@@ -6,7 +6,7 @@ import { quality } from './quality';
 // All drawing happens in logical pixels; the canvas is `scale` times larger so art stays crisp
 // when the game renders above 1x. External PNGs follow the @2x spec (see ASSET_MANIFEST.md).
 
-export type Painter = (ctx: CanvasRenderingContext2D) => void;
+type Painter = (ctx: CanvasRenderingContext2D) => void;
 
 const scales = new Map<string, number>();
 const external = new Set<string>();
@@ -16,7 +16,7 @@ export function registerExternal(key: string, scale = 2) {
   external.add(key);
 }
 
-export function isExternal(key: string) { return external.has(key); }
+function isExternal(key: string) { return external.has(key); }
 
 // Texture pixels per logical pixel for `key` (1 for anything not baked or registered).
 export function artScale(key: string) { return scales.get(key) ?? 1; }
@@ -55,13 +55,6 @@ export function unbakeAll(scene: Phaser.Scene) {
     for (const animation of scene.anims.getAnimsFromTexture(key)) scene.anims.remove(animation);
     unbake(scene, key);
   }
-}
-
-// Shows a texture at its logical size regardless of its pixel scale.
-export function fitArt<T extends Phaser.GameObjects.Components.Transform & { texture: Phaser.Textures.Texture }>(object: T, extra = 1) {
-  const scale = extra / artScale(object.texture.key);
-  object.setScale(scale);
-  return object;
 }
 
 // ----- drawing helpers -----

@@ -3,8 +3,8 @@ import { registerExternal } from './art';
 import { MANIFEST_URL, type RuntimeManifest } from './asset-manifest';
 
 const MANIFEST_KEY = 'asset-manifest';
-export const loadedAssets: string[] = [];
-export const failedAssets: string[] = [];
+const loadedAssets: string[] = [];
+const failedAssets: string[] = [];
 
 // Queue the runtime manifest, then every PNG it lists. Keys that fail to load keep their
 // code-painted fallback, so a missing file never breaks the game.

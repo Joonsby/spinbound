@@ -11,9 +11,9 @@ const PLATFORM_CONTACT_MS = 50;
 const MAX_SPEED_X = 480;
 
 // Physics body; the drawn robot (RobotRig) is sized independently.
-export const PLAYER_BODY = { width: 30, height: 42 };
-export type PlayerPose = 'idle' | 'run' | 'jump' | 'fall' | 'roll' | 'hurt' | 'dead';
-export type PlayerFrame = { jumped: boolean; landed: boolean; landingSpeed: number; dashed: boolean };
+const PLAYER_BODY = { width: 30, height: 42 };
+type PlayerPose = 'idle' | 'run' | 'jump' | 'fall' | 'roll' | 'hurt' | 'dead';
+type PlayerFrame = { jumped: boolean; landed: boolean; landingSpeed: number; dashed: boolean };
 
 // Player physics state. Rendering lives in PlayerAnimator; HP and score live in the scene.
 export class Player {

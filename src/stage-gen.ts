@@ -423,7 +423,7 @@ export function makeFair(stage: StageData): StageData {
 }
 
 // Seconds for a time attack: a brisk run over the flat parts plus time for every climb or drop.
-export function timeLimitFor(stage: StageData) {
+function timeLimitFor(stage: StageData) {
   const route = routeOf(stage);
   let flat = 0;
   let turns = 0;

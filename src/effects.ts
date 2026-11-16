@@ -10,7 +10,7 @@ const RINGS = 5;
 const POPUPS = 5;
 const CONFETTI = [0xff8a1f, 0x5cf2ff, 0xffd24a, 0x7ed957, 0xff8fb1];
 
-export type GhostSource = { key: string; x: number; y: number; rotation: number; scale: number; flipX: boolean };
+type GhostSource = { key: string; x: number; y: number; rotation: number; scale: number; flipX: boolean };
 type Particle = {
   image: Phaser.GameObjects.Image; vx: number; vy: number; age: number; life: number;
   size: number; grow: number; gravity: number; drag: number; spin: number; fade: number;

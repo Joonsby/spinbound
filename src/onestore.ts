@@ -14,10 +14,6 @@ type OneStoreSdk = {
 
 const lifecycle = { pause: new Set<() => void>(), resume: new Set<() => void>() };
 let sdk: Promise<OneStoreSdk | null> = Promise.resolve(null);
-let connected = false;
-
-// True once the store answered initializeAsync. No ads are connected there yet.
-export const inOneStore = () => connected;
 
 function inToss() {
   try {
@@ -38,7 +34,6 @@ export function loadOneStore() {
       client.on('resume', () => lifecycle.resume.forEach((listener) => listener()));
       const info = await client.initializeAsync();
       if (info.err) return null;
-      connected = true;
       // The SDK's safeArea is left unused: its numbers came out far larger than the frame's real
       // insets and padded every screen edge. CSS env() still covers notches.
       document.documentElement.dataset.onestore = 'true';

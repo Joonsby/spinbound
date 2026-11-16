@@ -5,7 +5,7 @@ import { PROP_KEYS } from '../../graphics/props-art';
 import { artScale } from '../../graphics/art';
 import { DEPTH } from '../../graphics/depth';
 
-export type RopeConfig = { x: number; y: number; length: number };
+type RopeConfig = { x: number; y: number; length: number };
 
 // Hands sit this far below the top of the player body.
 const HAND_OFFSET = 6;

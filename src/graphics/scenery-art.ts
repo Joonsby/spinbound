@@ -7,7 +7,7 @@ import type { StageTheme } from './themes';
 // Bands are seamless: every shape is periodic over TILE or drawn wrapped around the edges.
 
 export const TILE = 1024;
-export const BAND = { clouds: 190, far: 320, mid: 300, near: 170, foreground: 56 };
+const BAND = { clouds: 190, far: 320, mid: 300, near: 170, foreground: 56 };
 export const TOP_BAND = { height: 32, surface: 10 };
 export const LEDGE = { height: 26, top: 4 };
 

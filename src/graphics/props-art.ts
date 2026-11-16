@@ -28,7 +28,7 @@ export const PROP_KEYS = {
   post: 'prop-sign-post',
 };
 export const COIN_FRAMES = 8;
-export const BOOST_FRAMES = 4;
+const BOOST_FRAMES = 4;
 export const SIGN_SLICE = 10;
 
 function paintCoin(ctx: Ctx, frame: number) {

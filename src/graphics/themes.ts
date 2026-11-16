@@ -1,6 +1,6 @@
 // Stage looks. Stage data keeps its numeric `theme` (also used for music); this maps it to visuals.
 
-export type ThemeId = 'meadow' | 'forest' | 'volcano';
+type ThemeId = 'meadow' | 'forest' | 'volcano';
 
 export type StageTheme = {
   id: ThemeId;

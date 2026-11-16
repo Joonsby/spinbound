@@ -5,7 +5,7 @@ import type { VisualSync } from '../visual-sync';
 import { PROP_KEYS } from '../../graphics/props-art';
 import { DEPTH } from '../../graphics/depth';
 
-export type WallConfig = { x: number; y: number; width?: number; height?: number };
+type WallConfig = { x: number; y: number; width?: number; height?: number };
 
 // Solid until a fast roll hits its side face; the roll then passes through at full speed.
 export class BreakableWalls {
