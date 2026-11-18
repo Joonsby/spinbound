@@ -154,3 +154,6 @@ vite.config.ts.timestamp-*
 # Android release signing: the keystore and its passwords stay out of git (back them up separately)
 android/keystore.properties
 *.jks
+
+# Claude Code local settings
+.claude/
